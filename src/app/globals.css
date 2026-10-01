@@ -1,0 +1,645 @@
+/* globals.css */
+
+:root {
+  /* Mystical Midnight void palette */
+  --bg-void: #030308;
+  --bg-surface: #070712;
+  --bg-panel: rgba(13, 13, 30, 0.65);
+  --bg-card: #0f0f23;
+
+  --gold-primary: #e6c262;
+  --gold-glow: rgba(230, 194, 98, 0.45);
+  --gold-dim: #9a834a;
+
+  --text-primary: #f0ebd8;
+  --text-muted: #8d92a0;
+
+  --accent-mystic: #7d44b8;
+  --accent-celestial: #3a86c8;
+  --border-gold: rgba(230, 194, 98, 0.2);
+  --border-glass: rgba(255, 255, 255, 0.05);
+
+  --font-heading: var(--font-heading), 'Cinzel', serif;
+  --font-body: var(--font-body), 'Cormorant Garamond', serif;
+  --font-ui: var(--font-ui), 'Inter', sans-serif;
+
+  /* Transitions */
+  --ease-mystic: cubic-bezier(0.25, 1, 0.5, 1);
+  --transition-smooth: all 0.5s var(--ease-mystic);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-heading {
+  font-family: var(--font-heading);
+  letter-spacing: 0.1em;
+  color: var(--gold-primary);
+  text-shadow: 0 0 15px rgba(230, 194, 98, 0.2);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-void);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gold-dim);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-primary);
+}
+
+/* Ambient Starfield (CSS-only, high performance) */
+.starfield-ambient {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 100px 150px, rgba(230, 194, 98, 0.5), transparent),
+    radial-gradient(2px 2px at 350px 250px, rgba(125, 68, 184, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 850px 450px, rgba(58, 134, 200, 0.4), transparent);
+  background-size: 1000px 800px;
+  animation: twinkleStars 160s linear infinite;
+  opacity: 0.35;
+}
+
+@keyframes twinkleStars {
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-30px);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* Candle Glow Background Auras - Optimized, NO BLUR filter */
+.candle-glow-left {
+  position: fixed;
+  bottom: -20vh;
+  left: -20vw;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(230, 194, 98, 0.06) 0%, rgba(125, 68, 184, 0.02) 40%, transparent 60%);
+  z-index: 0;
+  pointer-events: none;
+  animation: candleFlicker 8s ease-in-out infinite alternate;
+}
+
+.candle-glow-right {
+  position: fixed;
+  top: -20vh;
+  right: -20vw;
+  width: 65vw;
+  height: 65vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(58, 134, 200, 0.05) 0%, rgba(13, 13, 30, 0) 50%);
+  z-index: 0;
+  pointer-events: none;
+  animation: candleFlicker 11s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes candleFlicker {
+  0% {
+    transform: scale(1) translate(0, 0);
+    opacity: 0.8;
+  }
+
+  33% {
+    transform: scale(1.05) translate(10px, -15px);
+    opacity: 0.95;
+  }
+
+  66% {
+    transform: scale(0.97) translate(-15px, 10px);
+    opacity: 0.75;
+  }
+
+  100% {
+    transform: scale(1.02) translate(5px, 5px);
+    opacity: 0.9;
+  }
+}
+
+/* CSS-only Shimmer button effect */
+.btn-gold {
+  position: relative;
+  background: linear-gradient(135deg, #d4af37 0%, #aa8010 100%);
+  border: 1px solid var(--gold-primary);
+  color: #030308;
+  padding: 0.75rem 2rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(230, 194, 98, 0.2);
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(230, 194, 98, 0.35);
+  border-color: #ffffff;
+}
+
+.btn-gold::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 20%;
+  height: 200%;
+  background: rgba(255, 255, 255, 0.25);
+  transform: rotate(30deg);
+  transition: none;
+}
+
+.btn-gold:hover::after {
+  left: 120%;
+  transition: left 0.75s ease-in-out;
+}
+
+/* Glassmorphism Panel styles */
+.glass-panel {
+  background: var(--bg-panel);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+}
+
+/* 3D Card Flipping CSS Container */
+.card-scene {
+  perspective: 1000px;
+  width: 130px;
+  height: 220px;
+}
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.card-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-gold);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.card-back {
+  background: #0f0f23;
+  transform: rotateY(0deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-front {
+  background: #030308;
+  transform: rotateY(180deg);
+}
+
+.is-reversed-card .card-front {
+  transform: rotateY(180deg) rotateZ(180deg);
+}
+
+/* Soft gold aura pulse */
+.card-pulse-active {
+  box-shadow: 0 0 25px var(--gold-primary), 0 0 10px var(--gold-glow);
+  border-color: #ffffff;
+  animation: goldPulse 2.5s infinite alternate;
+}
+
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 15px rgba(230, 194, 98, 0.35);
+  }
+
+  100% {
+    box-shadow: 0 0 28px rgba(230, 194, 98, 0.7);
+  }
+}
+
+/* Card deck stack */
+.deck-stack {
+  position: relative;
+  width: 130px;
+  height: 220px;
+}
+
+.deck-card-stacked {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-gold);
+  background: #070712;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  transform-origin: bottom center;
+  transition: all 0.3s ease;
+}
+
+/* Keyframe shuffle animation */
+@keyframes shuffleLeft {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    z-index: 1;
+  }
+
+  50% {
+    transform: translateX(-150px) rotate(-15deg);
+    z-index: 1;
+  }
+
+  100% {
+    transform: translateX(0) rotate(0deg);
+    z-index: 0;
+  }
+}
+
+@keyframes shuffleRight {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    z-index: 0;
+  }
+
+  50% {
+    transform: translateX(150px) rotate(15deg);
+    z-index: 1;
+  }
+
+  100% {
+    transform: translateX(0) rotate(0deg);
+    z-index: 2;
+  }
+}
+
+.shuffling-left {
+  animation: shuffleLeft 0.8s ease-in-out infinite;
+}
+
+.shuffling-right {
+  animation: shuffleRight 0.8s ease-in-out infinite;
+}
+
+/* Landing Welcome Animation */
+.welcome-section {
+  animation: fadeInMystic 1.8s var(--ease-mystic);
+}
+
+@keyframes fadeInMystic {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Chat Dot Pulse Indicator */
+.pulse-indicator {
+  width: 8px;
+  height: 8px;
+  background-color: var(--gold-primary);
+  border-radius: 50%;
+  display: inline-block;
+  animation: chatDotPulse 1.5s infinite ease-in-out;
+}
+
+@keyframes chatDotPulse {
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* Celtic Cross Responsive Layout */
+@media (max-width: 768px) {
+  .celtic-desktop-canvas {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+    gap: 1.5rem !important;
+    height: auto !important;
+    max-width: 100% !important;
+    padding: 1rem 0 !important;
+  }
+
+  .celtic-desktop-canvas>div {
+    position: static !important;
+    transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   Visual Novel Layout & Dialogue Box System
+   ========================================================================== */
+
+/* Full Screen VN Stage */
+.vn-stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  z-index: 10;
+}
+
+/* Main Character/Card Stage Area */
+.vn-main-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+/* Default centered stage items */
+.vn-stage-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: auto 0;
+}
+
+/* Side-by-Side Reading Layout */
+.vn-reading-layout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  gap: 2rem;
+  align-items: stretch;
+}
+
+.vn-col-left {
+  flex: 0 0 35%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: slideInLeftVN 0.8s var(--ease-mystic);
+}
+
+.vn-col-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRightVN 0.8s var(--ease-mystic);
+  height: 100%;
+  padding-bottom: 1rem;
+}
+
+/* Slide in transitions for visual elements */
+@keyframes slideInLeftVN {
+  from {
+    opacity: 0;
+    transform: translateX(-50px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes slideInRightVN {
+  from {
+    opacity: 0;
+    transform: translateX(50px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Dialogue Panel */
+.vn-dialogue-panel {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  border-radius: 12px;
+  border: 1px solid var(--border-gold);
+  background: rgba(5, 5, 12, 0.85);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(230, 194, 98, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  z-index: 20;
+  position: relative;
+  transition: border-color 0.3s ease;
+}
+
+/* When used in right column, make it tall */
+.vn-col-right .vn-dialogue-panel {
+  flex: 1;
+  max-width: 100%;
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Bottom pinned version (for synthesis/drawing) */
+.vn-dialogue-panel.bottom-pinned {
+  margin-bottom: 1.5rem;
+  min-height: 180px;
+}
+
+/* Animated glow if speaker is active/voice playing */
+.vn-dialogue-panel.speaker-active {
+  border-color: rgba(230, 194, 98, 0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85), 0 0 35px rgba(230, 194, 98, 0.15);
+}
+
+.vn-name-box {
+  align-self: flex-start;
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  letter-spacing: 0.15em;
+  color: var(--gold-primary);
+  border-bottom: 1px solid var(--border-gold);
+  padding-bottom: 4px;
+  margin-bottom: 0.8rem;
+  text-transform: uppercase;
+}
+
+.vn-text-box {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.vn-text-box-scroller {
+  /* Remove max-height so it can stretch in tall layout */
+  height: 100%;
+  padding-right: 8px;
+}
+
+/* Typewriter blink cursor */
+.vn-text-box::after {
+  content: ' ✦';
+  color: var(--gold-primary);
+  animation: sigilBlink 1.5s infinite step-end;
+}
+
+@keyframes sigilBlink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Mini Spread Overview in corner */
+.vn-spread-overview {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: rgba(3, 3, 8, 0.5);
+  border: 1px solid var(--border-glass);
+  backdrop-filter: blur(8px);
+  z-index: 30;
+}
+
+/* Custom mini card state */
+.mini-card-slot {
+  width: 32px;
+  height: 54px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.mini-card-slot.active {
+  border-color: var(--gold-primary);
+  box-shadow: 0 0 10px rgba(230, 194, 98, 0.4);
+}
+
+.mini-card-image {
+  object-fit: cover;
+  opacity: 0.5;
+}
+
+.mini-card-slot.active .mini-card-image {
+  opacity: 1;
+}
+
+/* Custom audio indicator panel */
+.tts-indicator {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border-gold);
+  background: rgba(230, 194, 98, 0.05);
+  cursor: pointer;
+  z-index: 30;
+  transition: all 0.2s ease;
+}
+
+.tts-indicator:hover {
+  background: rgba(230, 194, 98, 0.15);
+}
+
+.tts-indicator span {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--gold-primary);
+  letter-spacing: 0.1em;
+}
