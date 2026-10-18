@@ -19,9 +19,10 @@
   --border-gold: rgba(230, 194, 98, 0.2);
   --border-glass: rgba(255, 255, 255, 0.05);
 
-  --font-heading: var(--font-heading), 'Cinzel', serif;
-  --font-body: var(--font-body), 'Cormorant Garamond', serif;
-  --font-ui: var(--font-ui), 'Inter', sans-serif;
+  /* next/font exposes --nf-*; never reference a variable from inside itself */
+  --font-heading: var(--nf-heading), 'Playfair Display', Georgia, serif;
+  --font-body: var(--nf-body), 'Cormorant Garamond', Georgia, serif;
+  --font-ui: var(--nf-ui), 'Inter', system-ui, sans-serif;
 
   /* Transitions */
   --ease-mystic: cubic-bezier(0.25, 1, 0.5, 1);
@@ -50,7 +51,8 @@ h3,
 h4,
 .font-heading {
   font-family: var(--font-heading);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
+  line-height: 1.35; /* room for stacked Vietnamese diacritics */
   color: var(--gold-primary);
   text-shadow: 0 0 15px rgba(230, 194, 98, 0.2);
 }
