@@ -4,27 +4,26 @@ import './globals.css';
 
 // All three families ship a Vietnamese subset, so diacritics (ạ, ế, ữ, ẫ…)
 // render in the intended typeface instead of falling back glyph-by-glyph.
+// Variable fonts (no fixed weights): one file per subset instead of one per weight.
 // The CSS variables are prefixed `--nf-` so globals.css can build the final
 // `--font-*` stacks without referencing itself (which invalidates the var).
 const headingFont = Playfair_Display({
   variable: '--nf-heading',
   subsets: ['latin', 'vietnamese'],
-  weight: ['400', '600', '700', '900'],
   display: 'swap',
 });
 
 const bodyFont = Cormorant_Garamond({
   variable: '--nf-body',
   subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600', '700'],
   display: 'swap',
 });
 
 const uiFont = Inter({
   variable: '--nf-ui',
   subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600'],
   display: 'swap',
+  preload: false, // small UI labels only; keep the preload budget for headings/body
 });
 
 export const metadata: Metadata = {

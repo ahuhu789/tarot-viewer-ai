@@ -140,7 +140,7 @@ export function VisualNovelScene({
   );
 
   return (
-    <div className="vn-stage">
+    <div className={`vn-stage ${panelLayout === 'expanded' ? 'vn-stage--chat' : ''}`}>
       <Ambience />
 
       <header className="vn-topbar">

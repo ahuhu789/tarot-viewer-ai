@@ -633,9 +633,11 @@ a {
   padding: 0.9rem clamp(1.5rem, 6vw, 3rem);
 }
 
+/* Starts slightly visible: fully transparent text is not an LCP candidate, so
+   opacity:0 delayed Largest Contentful Paint until the 1.8s animation ended. */
 @keyframes fadeInMystic {
   from {
-    opacity: 0;
+    opacity: 0.2;
     transform: translateY(15px);
   }
   to {
@@ -895,8 +897,16 @@ a {
   max-height: 42dvh;
 }
 
+/* Greeting / intention: no cards on stage, the panel fills the space from the
+   first frame so it never grows (layout shift) while the reply streams in. */
+.vn-stage--chat .vn-main-stage {
+  display: none;
+}
+
 .vn-dialogue-panel--expanded {
-  max-height: min(78dvh, 720px);
+  flex: 1 1 0;
+  max-height: 720px;
+  margin-top: auto;
 }
 
 .vn-name-box {
@@ -1106,10 +1116,6 @@ a {
     --card-w: clamp(72px, calc(21dvh * 0.5775), 180px);
   }
 
-  .vn-dialogue-panel--expanded {
-    max-height: none;
-    flex: 1 1 auto;
-  }
 }
 
 @media (max-width: 480px) {
