@@ -16,6 +16,17 @@ const INITIAL_STATE: TarotReadingState = {
   detectedLanguage: '',
 };
 
+/**
+ * The opening greeting is fixed text shown instantly, so a session costs no AI
+ * call until the seeker actually writes something. Vietnamese by default; the
+ * reader switches language automatically if the seeker replies in another one.
+ */
+export const OPENING_GREETING = `Chào mừng bạn đến với không gian tĩnh lặng này. ✨
+
+Những lá bài Tarot ở đây không định đoạt số phận của bạn. Chúng là tấm gương giúp bạn lắng nghe chính mình, nhìn rõ hơn điều đang diễn ra và những hướng đi đang mở ra phía trước.
+
+Hãy hít một hơi thật sâu và chia sẻ điều bạn đang trăn trở: công việc, tình cảm, một lựa chọn sắp tới, hay đơn giản là thông điệp bạn cần cho hôm nay. *(You can also write in English.)*`;
+
 const DEFAULT_ERROR = 'The connection to the reader was interrupted. Please try again.';
 
 export interface ReadingError {
@@ -182,18 +193,27 @@ export function useReading() {
     [streamStore, updateMessages, updateState],
   );
 
-  // Start the session once. In React Strict Mode the effect runs twice in dev;
-  // the cleanup aborts the first request so only one greeting is generated.
+  // Start the session once with the fixed greeting (no network request).
   useEffect(() => {
-    // Starting a network request on mount is a legitimate effect (syncing with the
-    // server); the synchronous setState calls only mark the request as in-flight.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void runReadingStep([]);
+    // Show the fixed greeting locally (no API call) and move straight to the
+    // intention phase. Guarded so Strict Mode's double effect adds it only once.
+    if (messagesRef.current.length === 0) {
+      updateMessages(() => [
+        {
+          id: newId('ai-greeting'),
+          role: 'assistant',
+          content: OPENING_GREETING,
+          timestamp: new Date().toISOString(),
+          metadata: { phase: 'greeting', activeCardIndex: 0 },
+        },
+      ]);
+      updateState((prev) => ({ ...prev, phase: 'intention' }));
+    }
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [runReadingStep]);
+  }, [updateMessages, updateState]);
 
   const sendMessage = useCallback(
     async (content: string) => {
