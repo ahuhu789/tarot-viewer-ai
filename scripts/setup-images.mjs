@@ -1,5 +1,8 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const SOURCE_DIR = path.join(__dirname, '..', 'WS Tarot scans');
 const DEST_DIR = path.join(__dirname, '..', 'public', 'cards');

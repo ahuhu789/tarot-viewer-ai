@@ -1,41 +1,39 @@
-import { NextResponse } from 'next/server';
-import { SpreadId, DrawnCard } from '@/types/tarot';
+import { randomInt } from 'node:crypto';
+import { DrawnCard } from '@/types/tarot';
 import { SPREADS } from '@/data/spreads';
+import { drawRequestSchema } from '@/lib/validation';
+import { clientIp, rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 export async function POST(req: Request) {
+  const limit = rateLimit(`draw:${clientIp(req)}`, 30, 60_000);
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
+
+  let body: unknown;
   try {
-    const body = await req.json();
-    const { spreadId } = body as { spreadId: SpreadId };
-
-    const spread = SPREADS[spreadId];
-    if (!spread) {
-      return NextResponse.json({ error: 'Invalid spread selection' }, { status: 400 });
-    }
-
-    const totalCardsToDraw = spread.positions.length;
-    const drawn: DrawnCard[] = [];
-    const chosenIndices = new Set<number>();
-
-    while (drawn.length < totalCardsToDraw) {
-      const cardNum = Math.floor(Math.random() * 78);
-      if (!chosenIndices.has(cardNum)) {
-        chosenIndices.add(cardNum);
-        
-        // 30% chance for a card to be reversed
-        const isReversed = Math.random() > 0.7;
-
-        drawn.push({
-          cardNumber: cardNum,
-          isReversed,
-          positionIndex: drawn.length,
-          isRevealed: false,
-        });
-      }
-    }
-
-    return NextResponse.json({ drawnCards: drawn });
-  } catch (error) {
-    console.error('❌ Error drawing cards:', error);
-    return NextResponse.json({ error: 'Failed to draw cards' }, { status: 500 });
+    body = await req.json();
+  } catch {
+    return Response.json({ error: 'Invalid request body.' }, { status: 400 });
   }
+
+  const parsed = drawRequestSchema.safeParse(body);
+  const spread = parsed.success ? SPREADS[parsed.data.spreadId] : undefined;
+  if (!spread) {
+    return Response.json({ error: 'Invalid spread selection.' }, { status: 400 });
+  }
+
+  const chosen = new Set<number>();
+  const drawn: DrawnCard[] = [];
+  while (drawn.length < spread.positions.length) {
+    const cardNumber = randomInt(78);
+    if (chosen.has(cardNumber)) continue;
+    chosen.add(cardNumber);
+    drawn.push({
+      cardNumber,
+      isReversed: randomInt(10) < 3, // 30% chance of a reversed card
+      positionIndex: drawn.length,
+      isRevealed: false,
+    });
+  }
+
+  return Response.json({ drawnCards: drawn });
 }

@@ -1,5 +1,3 @@
-export const DECK_ID = '1909';
-
 export interface TarotCard {
   cardNumber: number;          // 0–77
   cardName: string;            // "The Fool"
@@ -15,7 +13,7 @@ export interface TarotCard {
   guideUrl: string;
 }
 
-export type SpreadId = 'single' | 'three' | 'celtic';
+export type SpreadId = 'single' | 'three';
 
 export interface SpreadPosition {
   name: string;

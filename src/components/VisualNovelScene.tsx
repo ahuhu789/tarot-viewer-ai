@@ -1,40 +1,91 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { ChatMessage, TarotReadingState, TarotCard as TarotCardType } from '@/types/tarot';
+import React, { memo, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { ChatMessage, ReadingPhase, SpreadId, TarotReadingState, TarotCard as TarotCardType } from '@/types/tarot';
+import type { TextStream } from '@/lib/text-stream';
+import type { ReadingError } from '@/hooks/useReading';
 import { useTTS } from '@/hooks/useTTS';
 import { SpreadPicker } from './SpreadPicker';
 import { CardDeck } from './CardDeck';
 import { SeventyEightCardsSpread } from './SeventyEightCardsSpread';
 import { SpreadLayout } from './SpreadLayout';
+import { SpreadOverview } from './SpreadOverview';
 import { TarotCard } from './TarotCard';
+import { DialoguePanel } from './DialoguePanel';
 import { SPREADS } from '@/data/spreads';
 
 interface VisualNovelSceneProps {
   state: TarotReadingState;
   messages: ChatMessage[];
   isTyping: boolean;
-  typingContent: string;
+  streamStore: TextStream;
+  error: ReadingError | null;
+  meaningsByNumber: Map<number, TarotCardType>;
+  onRetry: () => void;
+  onDismissError: () => void;
   onSendMessage: (text: string) => void;
-  onSelectSpread: (spreadId: any) => void;
+  onSelectSpread: (spreadId: SpreadId) => void;
   onFinishShuffling: () => void;
   onSubmitCardSelection: () => void;
   onFinishDrawing: () => void;
   onRevealCard: (index: number) => void;
   onAdvanceToNextCard: () => void;
-  onGoToCard?: (index: number) => void;
+  onGoToCard: (index: number) => void;
   onRestart: () => void;
-  cardMeanings: TarotCardType[];
-  onNewMessageCallback: React.MutableRefObject<((text: string) => void) | null>;
+  setOnAssistantMessage: (listener: ((text: string) => void) | null) => void;
 }
 
-export const VisualNovelScene: React.FC<VisualNovelSceneProps> = ({
+const READING_PHASES: ReadingPhase[] = ['interpreting', 'card_chat'];
+const SPREAD_VISIBLE_PHASES: ReadingPhase[] = ['drawing', 'synthesis', 'follow_up', 'closing'];
+
+/** Local guidance shown while the user is acting on the cards (no AI call in these phases). */
+const PHASE_GUIDANCE: Partial<Record<ReadingPhase, string>> = {
+  shuffling: 'Hold your question in mind, then tap the deck to shuffle.',
+  manual_selection: 'Let your intuition guide you — pick the cards that call to you.',
+  drawing: 'Tap each card to reveal it. When all are face up, we will begin.',
+};
+
+/** Decorative background; memoized so it never re-renders. */
+const Ambience = memo(function Ambience() {
+  return (
+    <div aria-hidden="true">
+      <div className="starfield-ambient" />
+      <div className="candle-glow-left" />
+      <div className="candle-glow-right" />
+    </div>
+  );
+});
+
+/** Picks the reader text to show: only assistant messages, matched to the current card when reading. */
+function selectReaderText(messages: ChatMessage[], state: TarotReadingState): string {
+  const guidance = PHASE_GUIDANCE[state.phase];
+  if (guidance) return guidance;
+
+  const assistant = messages.filter((m) => m.role === 'assistant');
+  if (READING_PHASES.includes(state.phase)) {
+    for (let i = assistant.length - 1; i >= 0; i--) {
+      const meta = assistant[i].metadata;
+      if (
+        meta?.activeCardIndex === state.currentCardIndex &&
+        (meta.phase === 'interpreting' || meta.phase === 'card_chat')
+      ) {
+        return assistant[i].content;
+      }
+    }
+  }
+  return assistant[assistant.length - 1]?.content ?? '';
+}
+
+export function VisualNovelScene({
   state,
   messages,
   isTyping,
-  typingContent,
+  streamStore,
+  error,
+  meaningsByNumber,
+  onRetry,
+  onDismissError,
   onSendMessage,
   onSelectSpread,
   onFinishShuffling,
@@ -44,327 +95,134 @@ export const VisualNovelScene: React.FC<VisualNovelSceneProps> = ({
   onAdvanceToNextCard,
   onGoToCard,
   onRestart,
-  cardMeanings,
-  onNewMessageCallback,
-}) => {
-  const router = useRouter();
+  setOnAssistantMessage,
+}: VisualNovelSceneProps) {
   const { voiceEnabled, isSpeaking, toggleVoice, speak, stopSpeaking } = useTTS();
 
-  // Register TTS callback to read completed incoming messages
+  // Read completed AI replies aloud (when voice is enabled).
   useEffect(() => {
-    onNewMessageCallback.current = (text: string) => {
-      speak(text);
-    };
+    setOnAssistantMessage(speak);
     return () => {
-      onNewMessageCallback.current = null;
+      setOnAssistantMessage(null);
       stopSpeaking();
     };
-  }, [voiceEnabled]);
+  }, [setOnAssistantMessage, speak, stopSpeaking]);
 
+  const { phase, drawnCards, currentCardIndex } = state;
   const activeSpread = SPREADS[state.selectedSpread || 'three'];
-  const revealedCount = state.drawnCards.filter((c) => c.isRevealed).length;
-  const lastMessage = messages[messages.length - 1];
+  const revealedCount = drawnCards.filter((c) => c.isRevealed).length;
+  const readerText = useMemo(() => selectReaderText(messages, state), [messages, state]);
 
-  // Helper to get active card meanings
-  const activeCard = state.drawnCards[state.currentCardIndex];
-  const activeCardMeaning = cardMeanings.find((m) => m.cardNumber === activeCard?.cardNumber);
-  const activePosition = activeSpread?.positions[activeCard?.positionIndex];
+  const isReading = READING_PHASES.includes(phase);
+  const activeCard = drawnCards[currentCardIndex];
+  const activePosition = activeCard ? activeSpread?.positions[activeCard.positionIndex] : undefined;
+  const panelLayout = isReading ? 'side' : phase === 'greeting' || phase === 'intention' ? 'expanded' : 'bottom';
 
-  // User input submit handler
-  const [inputValue, setInputValue] = React.useState('');
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isTyping) return;
-    onSendMessage(inputValue.trim());
-    setInputValue('');
-  };
-
-  const showInput = state.phase === 'intention' || state.phase === 'card_chat' || state.phase === 'follow_up';
-
-  // Extract the dialogue panel for reuse between layouts
   const dialoguePanel = (
-    <div className={`vn-dialogue-panel ${state.phase !== 'interpreting' && state.phase !== 'card_chat' ? 'bottom-pinned' : ''} ${isSpeaking ? 'speaker-active' : ''}`}>
-      <div className="vn-name-box">🌙 The Card Reader</div>
-
-      <div className="vn-text-box">
-        <div className="vn-text-box-scroller">
-          {isTyping ? (
-            typingContent || 'Whispering to the cards...'
-          ) : (
-            lastMessage?.content || 'Welcoming your presence...'
-          )}
-        </div>
-      </div>
-
-      {/* Input & Button Controls */}
-      <div style={styles.bottomControls}>
-        {showInput && (
-          <form onSubmit={handleSubmit} style={styles.inputForm}>
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={isTyping}
-              placeholder={
-                state.phase === 'intention'
-                  ? 'State your question or seek general guidance...'
-                  : 'Ask a question about this card, or click Next...'
-              }
-              style={{ ...styles.textInput, opacity: isTyping ? 0.5 : 1 }}
-            />
-            <button type="submit" className="btn-gold" style={{ ...styles.sendBtn, opacity: (!inputValue.trim() || isTyping) ? 0.5 : 1 }} disabled={!inputValue.trim() || isTyping}>
-              ✦ Send
-            </button>
-          </form>
-        )}
-
-        {/* Action buttons */}
-        <div style={styles.buttonsRow}>
-          {state.phase === 'drawing' && revealedCount === state.drawnCards.length && state.drawnCards.length > 0 && (
-            <button onClick={onFinishDrawing} className="btn-gold" style={styles.actionBtn}>
-              Begin Interpretation ✦
-            </button>
-          )}
-
-          {state.phase === 'drawing' && revealedCount < state.drawnCards.length && (
-            <div style={styles.promptHint}>
-              Reveal all cards to begin ({revealedCount}/{state.drawnCards.length} flipped)
-            </div>
-          )}
-
-          {state.phase === 'card_chat' && (
-            <button onClick={onAdvanceToNextCard} className="btn-gold" style={{ ...styles.actionBtn, opacity: isTyping ? 0.5 : 1 }} disabled={isTyping}>
-              {state.currentCardIndex + 1 >= state.drawnCards.length
-                ? 'Request Final Synthesis ✦'
-                : 'Move to Next Card ➔'}
-            </button>
-          )}
-
-          {state.phase === 'closing' && (
-            <button onClick={onRestart} className="btn-gold" style={styles.actionBtn}>
-              Begin Another Journey ✦
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <DialoguePanel
+      phase={phase}
+      text={readerText}
+      isTyping={isTyping}
+      streamStore={streamStore}
+      error={error}
+      isSpeaking={isSpeaking}
+      layout={panelLayout}
+      revealedCount={revealedCount}
+      totalCards={drawnCards.length}
+      isLastCard={currentCardIndex + 1 >= drawnCards.length}
+      onSend={onSendMessage}
+      onRetry={onRetry}
+      onDismissError={onDismissError}
+      onFinishDrawing={onFinishDrawing}
+      onAdvance={onAdvanceToNextCard}
+      onRestart={onRestart}
+    />
   );
 
   return (
-    <div className="vn-stage">
-      {/* Background decorations */}
-      <div className="starfield-ambient" />
-      <div className="candle-glow-left" />
-      <div className="candle-glow-right" />
+    <div className={`vn-stage ${panelLayout === 'expanded' ? 'vn-stage--chat' : ''}`}>
+      <Ambience />
 
-      {/* Top Header Controls */}
-      <div style={styles.topBar}>
-        <button onClick={() => router.push('/')} style={styles.leaveBtn}>
-          ✦ Exit Sanctuary
-        </button>
+      <header className="vn-topbar">
+        <Link href="/" className="vn-exit-btn" aria-label="Exit Sanctuary">
+          ✦ Exit<span className="vn-exit-btn__long"> Sanctuary</span>
+        </Link>
 
-        <div style={styles.controlsRight}>
-          {/* TTS Speaker Toggle */}
-          <div className="tts-indicator" onClick={toggleVoice}>
-            <span>{voiceEnabled ? '🔊 VOICE: ON' : '🔇 VOICE: OFF'}</span>
-          </div>
+        <div className="vn-topbar__right">
+          {activeSpread && drawnCards.length > 0 && (
+            <SpreadOverview
+              drawnCards={drawnCards}
+              positions={activeSpread.positions}
+              currentCardIndex={currentCardIndex}
+              highestCardIndexReached={state.highestCardIndexReached}
+              canNavigate={isReading && !isTyping}
+              meaningsByNumber={meaningsByNumber}
+              onGoToCard={onGoToCard}
+            />
+          )}
+          <button
+            type="button"
+            className="voice-toggle"
+            onClick={toggleVoice}
+            aria-pressed={voiceEnabled}
+            aria-label={voiceEnabled ? 'Turn voice off' : 'Turn voice on'}
+          >
+            {voiceEnabled ? '🔊 Voice: on' : '🔇 Voice: off'}
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Spread Thumbnail Strip (Shown during interpretation/chat) */}
-      {activeSpread && state.drawnCards.length > 0 && (
-        <div className="vn-spread-overview">
-          {state.drawnCards.map((c, i) => {
-            const isCurrent = state.currentCardIndex === i;
-            const isAccessible = i <= state.highestCardIndexReached;
-            const meaning = cardMeanings.find((m) => m.cardNumber === c.cardNumber);
-            return (
-              <div
-                key={i}
-                className={`mini-card-slot ${isCurrent ? 'active' : ''} ${isAccessible ? 'cursor-pointer hover:scale-105 transition-transform' : 'opacity-50 cursor-not-allowed'}`}
-                title={`${activeSpread.positions[i]?.name}: ${meaning?.cardName || 'Card'}`}
-                onClick={() => {
-                  if (isAccessible && onGoToCard) {
-                    onGoToCard(i);
-                  }
-                }}
-              >
-                {c.isRevealed ? (
-                  <Image
-                    src={`/cards/1909/${c.cardNumber}.jpg`}
-                    alt="Card Front"
-                    fill
-                    className="mini-card-image"
-                    sizes="32px"
-                  />
-                ) : (
-                  <Image
-                    src="/cards/back.jpg"
-                    alt="Card Back"
-                    fill
-                    className="mini-card-image"
-                    sizes="32px"
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Center Stage Panel */}
-      <div className="vn-main-stage">
-        {/* NON-READING PHASES (Centered) */}
-        {(state.phase === 'spread_selection' || state.phase === 'shuffling' || state.phase === 'manual_selection' || state.phase === 'drawing' || state.phase === 'synthesis' || state.phase === 'follow_up' || state.phase === 'closing') && (
+      <main className="vn-main-stage">
+        {!isReading && (
           <div className="vn-stage-center">
-            {state.phase === 'spread_selection' && (
-              <div style={styles.modalContent}>
+            {phase === 'spread_selection' && (
+              <div className="vn-modal">
                 <SpreadPicker onSelect={onSelectSpread} />
               </div>
             )}
-            {state.phase === 'shuffling' && (
-              <div style={styles.modalContent}>
+            {phase === 'shuffling' && (
+              <div className="vn-modal">
                 <CardDeck onDraw={onFinishShuffling} />
               </div>
             )}
-            {state.phase === 'manual_selection' && state.selectedSpread && (
-              <SeventyEightCardsSpread
-                spreadId={state.selectedSpread}
-                onSelectComplete={onSubmitCardSelection}
-              />
+            {phase === 'manual_selection' && state.selectedSpread && (
+              <SeventyEightCardsSpread spreadId={state.selectedSpread} onSelectComplete={onSubmitCardSelection} />
             )}
-            {(state.phase === 'drawing' || state.phase === 'synthesis' || state.phase === 'follow_up' || state.phase === 'closing') && (
-              <div style={styles.drawingStage}>
-                <SpreadLayout
-                  drawnCards={state.drawnCards}
-                  cardMeanings={cardMeanings}
-                  spreadId={state.selectedSpread || 'three'}
-                  currentCardIndex={state.currentCardIndex}
-                  onRevealCard={onRevealCard}
-                  phase={state.phase}
-                />
-              </div>
+            {SPREAD_VISIBLE_PHASES.includes(phase) && (
+              <SpreadLayout
+                drawnCards={drawnCards}
+                meaningsByNumber={meaningsByNumber}
+                spreadId={state.selectedSpread || 'three'}
+                currentCardIndex={currentCardIndex}
+                onRevealCard={onRevealCard}
+                phase={phase}
+              />
             )}
           </div>
         )}
 
-        {/* READING PHASES (Side-by-Side) */}
-        {(state.phase === 'interpreting' || state.phase === 'card_chat') && activeCard && (
+        {isReading && activeCard && (
           <div className="vn-reading-layout">
             <div className="vn-col-left">
               <TarotCard
+                index={currentCardIndex}
                 cardNumber={activeCard.cardNumber}
-                cardName={activeCardMeaning?.cardName || ''}
+                cardName={meaningsByNumber.get(activeCard.cardNumber)?.cardName || ''}
                 isReversed={activeCard.isReversed}
                 isRevealed={activeCard.isRevealed}
                 isActive={isSpeaking}
-                onReveal={() => onRevealCard(state.currentCardIndex)}
+                onReveal={onRevealCard}
                 positionName={activePosition?.name}
                 positionDescription={activePosition?.description}
                 size="large"
               />
             </div>
-            <div className="vn-col-right">
-              {dialoguePanel}
-            </div>
+            <div className="vn-col-right">{dialoguePanel}</div>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Bottom Pinned Dialogue (Only show if not in side-by-side mode) */}
-      {!(state.phase === 'interpreting' || state.phase === 'card_chat') && dialoguePanel}
+      {!isReading && dialoguePanel}
     </div>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  topBar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '1.25rem 1.5rem',
-    zIndex: 30,
-    width: '100%',
-  },
-  leaveBtn: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--text-muted)',
-    fontSize: '0.8rem',
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-    fontFamily: 'var(--font-ui)',
-    transition: 'color 0.2s',
-  },
-  controlsRight: {
-    display: 'flex',
-    gap: '0.75rem',
-    alignItems: 'center',
-    position: 'relative',
-    height: '24px',
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: '650px',
-    backgroundColor: 'rgba(5, 5, 12, 0.75)',
-    border: '1px solid var(--border-gold)',
-    borderRadius: '12px',
-    padding: '2rem',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-    backdropFilter: 'blur(16px)',
-  },
-  drawingStage: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  bottomControls: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    width: '100%',
-  },
-  inputForm: {
-    display: 'flex',
-    gap: '0.75rem',
-    width: '100%',
-    alignItems: 'center',
-  },
-  textInput: {
-    flex: 1,
-    padding: '0.75rem 1rem',
-    borderRadius: '6px',
-    border: '1px solid var(--border-gold)',
-    background: 'rgba(3, 3, 8, 0.5)',
-    color: 'var(--text-primary)',
-    fontSize: '0.95rem',
-    outline: 'none',
-    fontFamily: 'var(--font-body)',
-  },
-  sendBtn: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '0.85rem',
-    borderRadius: '6px',
-  },
-  buttonsRow: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    width: '100%',
-  },
-  actionBtn: {
-    fontSize: '0.85rem',
-    padding: '0.65rem 1.75rem',
-  },
-  promptHint: {
-    fontFamily: 'var(--font-ui)',
-    fontSize: '0.8rem',
-    color: 'var(--gold-primary)',
-    textAlign: 'center',
-    width: '100%',
-    padding: '0.5rem',
-    border: '1px dashed var(--border-gold)',
-    borderRadius: '6px',
-    backgroundColor: 'rgba(230, 194, 98, 0.02)',
-  },
-};
+}

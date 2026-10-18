@@ -24,7 +24,7 @@
 - 🔮 **Các Kiểu Trải Bài Phong Phú (Spread Types)**:
   - **Daily Draw (1 Lá)**: Thông điệp cốt lõi và bài học tâm linh định hướng cho ngày mới.
   - **Past, Present & Future (3 Lá)**: Trải bài kinh điển khai mở quá khứ, hiện tại và xu hướng tương lai.
-  - **Toàn Bộ 78 Lá (78-Card Spread)**: Chế độ khám phá và chiêm ngưỡng toàn bộ bộ bài.
+  - **Tự chọn bài từ 78 lá úp**: Sau khi xào bài, người xem tự tay chọn các lá bài từ toàn bộ bộ bài 78 lá.
 - 🧠 **Luồng AI Thông Minh Đa Bước (LangGraph StateGraph)**:
   - **Greeting & Intent**: Lắng nghe tâm sự, câu hỏi và tâm nguyện của người xem.
   - **Language Detection**: Tự động nhận diện ngôn ngữ câu hỏi (hỗ trợ mượt mà Tiếng Việt, Tiếng Anh và nhiều ngôn ngữ khác).
@@ -34,6 +34,7 @@
   - Phát âm thanh streaming lời thoại của Reader thời gian thực với chất giọng trầm ấm, bí ẩn.
 - 🌌 **Giao Diện Huyền Bí Sống Động (Mystical Visual Novel UI)**:
   - Bầu không khí tĩnh lặng với hiệu ứng ánh nến lung linh, tinh tú chuyển động, hiệu ứng xào bài và lật bài 3D mượt mà.
+  - Responsive (desktop ↔ mobile), font hỗ trợ đầy đủ tiếng Việt, hiển thị Markdown, tự cuộn khi AI đang trả lời, tôn trọng `prefers-reduced-motion`.
 
 ---
 
@@ -58,9 +59,11 @@ tarotviewerAI/
 │       ├── 1910/               # Rider-Waite-Smith 1910
 │       ├── 1920s-b/            # Phiên bản 1920s Pam B
 │       ├── 1920s-c/            # Phiên bản 1920s-1930s Pam C
-│       └── back.jpg            # Mặt sau lá bài cổ điển
+│       ├── back.jpg            # Mặt sau lá bài cổ điển
+│       └── web/                # Ảnh WebP ~600px đã tối ưu (app chỉ dùng thư mục này)
 ├── scripts/
-│   └── setup-images.js         # Script tự động xử lý và trích xuất ảnh lá bài
+│   ├── setup-images.mjs        # Script trích xuất ảnh lá bài từ bản scan gốc
+│   └── optimize-images.mjs     # Tạo ảnh WebP tối ưu (npm run images)
 ├── src/
 │   ├── app/
 │   │   ├── api/
@@ -76,7 +79,9 @@ tarotviewerAI/
 │   │   ├── TarotCard.tsx               # Component thẻ bài & lật bài 3D
 │   │   ├── SpreadPicker.tsx            # Lựa chọn kiểu trải bài
 │   │   ├── SpreadLayout.tsx            # Bố cục hiển thị vị trí các lá bài
-│   │   ├── VisualNovelScene.tsx        # Khung thoại tương tác với Tarot Reader
+│   │   ├── VisualNovelScene.tsx        # Màn hình chính (top bar, sân khấu, khung thoại)
+│   │   ├── DialoguePanel.tsx           # Khung thoại: text streaming, Markdown, ô nhập, lỗi + Retry
+│   │   ├── SpreadOverview.tsx          # Dải thumbnail các lá đã rút
 │   │   └── SeventyEightCardsSpread.tsx # Hiển thị danh mục 78 lá
 │   ├── data/
 │   │   └── spreads.ts                  # Cấu hình các kiểu trải bài
@@ -84,6 +89,10 @@ tarotviewerAI/
 │   │   ├── useReading.ts               # Hook quản lý tiến trình phiên trải bài
 │   │   └── useTTS.ts                   # Hook phát âm thanh giọng đọc
 │   ├── lib/
+│   │   ├── cards.ts                    # Đường dẫn ảnh lá bài (WebP)
+│   │   ├── text-stream.ts              # Store gom token streaming theo từng frame
+│   │   ├── validation.ts / limits.ts   # Kiểm tra đầu vào API (zod) và giới hạn độ dài
+│   │   ├── rate-limit.ts               # Giới hạn số request theo IP
 │   │   ├── csv-parser.ts               # Bộ đọc ý nghĩa lá bài từ CSV
 │   │   └── langgraph/                  # LangGraph Workflow, Prompts & States
 │   └── types/
@@ -100,13 +109,13 @@ tarotviewerAI/
 ## 🚀 Hướng dẫn cài đặt & Khởi chạy / Getting Started
 
 ### 1. Yêu cầu hệ thống
-- [Node.js](https://nodejs.org/) phiên bản 18.18 trở lên hoặc Node.js 20+
+- [Node.js](https://nodejs.org/) 20.9 trở lên (yêu cầu của Next.js 16)
 - Trình quản lý gói `npm`, `pnpm` hoặc `yarn`
 
 ### 2. Clone dự án
 ```bash
 git clone https://github.com/ahuhu789/tarot-viewer-ai.git
-cd tarotviewerAI
+cd tarot-viewer-ai
 ```
 
 ### 3. Cài đặt thư viện dependencies
@@ -132,6 +141,10 @@ ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 ```
 
 > 💡 *Ghi chú: Nếu không cung cấp `ELEVENLABS_API_KEY`, ứng dụng vẫn hoạt động bình thường ở chế độ hội thoại chữ.*
+>
+> ⚠️ *`ALIBABA_API_KEY` là bắt buộc. Nếu thiếu, API `/api/reading` trả về lỗi 503 kèm thông báo rõ ràng (không còn dùng key giả).*
+>
+> 🔒 *Các API có giới hạn số request theo IP (đọc bài 20/phút, TTS 12/phút) và giới hạn độ dài tin nhắn. Bộ giới hạn chạy trong bộ nhớ của một tiến trình Node; khi triển khai nhiều instance nên thay bằng Redis/Upstash.*
 
 ### 5. Khởi chạy môi trường phát triển (Development)
 ```bash
@@ -140,7 +153,20 @@ npm run dev
 
 Mở trình duyệt và truy cập: [http://localhost:3000](http://localhost:3000)
 
-### 6. Build cho môi trường Production
+### 6. (Tuỳ chọn) Tạo lại ảnh lá bài tối ưu
+Ảnh WebP trong `public/cards/web/` đã có sẵn. Chỉ cần chạy lại khi thay đổi ảnh gốc:
+```bash
+npm run images            # bộ 1909 (mặc định)
+npm run images -- 1910    # bộ khác
+```
+
+### 7. Kiểm tra chất lượng mã
+```bash
+npm run lint
+npx tsc --noEmit
+```
+
+### 8. Build cho môi trường Production
 ```bash
 npm run build
 npm run start
@@ -151,7 +177,7 @@ npm run start
 ## 🔮 Hướng dẫn trải nghiệm / How to Use
 
 1. **Bước vào Sanctuary**: Nhấn *"Enter the Sanctuary"* tại trang chủ.
-2. **Chọn bộ bài & Kiểu trải**: Lựa chọn phiên bản Rider-Waite mong muốn và hình thức trải (1 lá hoặc 3 lá).
+2. **Chọn kiểu trải**: Daily Draw (1 lá) hoặc Quá khứ – Hiện tại – Tương lai (3 lá). Ứng dụng hiện dùng bộ scan 1909.
 3. **Đặt tâm niệm & Đặt câu hỏi**: Nhập câu hỏi, vấn đề bạn đang băn khoăn bằng Tiếng Việt hoặc bất kỳ ngôn ngữ nào.
 4. **Rút bài**: Tập trung tâm trí và chạm vào bộ bài để rút các lá bài định mệnh.
 5. **Lắng nghe & Trò chuyện**:

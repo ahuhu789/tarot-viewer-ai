@@ -1,86 +1,54 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useReading } from '@/hooks/useReading';
 import { VisualNovelScene } from '@/components/VisualNovelScene';
 import { TarotCard } from '@/types/tarot';
 
-function ReadingRoomContent() {
-  const {
-    state,
-    messages,
-    isTyping,
-    typingContent,
-    sendMessage,
-    selectSpread,
-    finishShuffling,
-    submitCardSelection,
-    finishDrawing,
-    revealCard,
-    advanceToNextCard,
-    goToCard,
-    restartReading,
-    onNewMessageCallback,
-  } = useReading();
-
+export default function ReadingRoomPage() {
+  const reading = useReading();
   const [cardMeanings, setCardMeanings] = useState<TarotCard[]>([]);
 
-  // Load all card definitions from CSV endpoint on mount
+  // Load all card definitions once.
   useEffect(() => {
-    async function fetchCards() {
-      try {
-        const res = await fetch('/api/cards');
-        const data = await res.json();
-        if (data.cards) {
-          setCardMeanings(data.cards);
-        }
-      } catch (err) {
-        console.error('❌ Error fetching card definitions:', err);
-      }
-    }
-    fetchCards();
+    const controller = new AbortController();
+    fetch('/api/cards', { signal: controller.signal })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.cards)) setCardMeanings(data.cards);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) console.error('❌ Error fetching card definitions:', err);
+      });
+    return () => controller.abort();
   }, []);
+
+  // O(1) lookups instead of Array.find on every render.
+  const meaningsByNumber = useMemo(
+    () => new Map(cardMeanings.map((c) => [c.cardNumber, c] as const)),
+    [cardMeanings],
+  );
 
   return (
     <VisualNovelScene
-      state={state}
-      messages={messages}
-      isTyping={isTyping}
-      typingContent={typingContent}
-      onSendMessage={sendMessage}
-      onSelectSpread={selectSpread}
-      onFinishShuffling={finishShuffling}
-      onSubmitCardSelection={submitCardSelection}
-      onFinishDrawing={finishDrawing}
-      onRevealCard={revealCard}
-      onAdvanceToNextCard={advanceToNextCard}
-      onGoToCard={goToCard}
-      onRestart={restartReading}
-      cardMeanings={cardMeanings}
-      onNewMessageCallback={onNewMessageCallback}
+      state={reading.state}
+      messages={reading.messages}
+      isTyping={reading.isTyping}
+      streamStore={reading.streamStore}
+      error={reading.error}
+      meaningsByNumber={meaningsByNumber}
+      onRetry={reading.retry}
+      onDismissError={reading.dismissError}
+      onSendMessage={reading.sendMessage}
+      onSelectSpread={reading.selectSpread}
+      onFinishShuffling={reading.finishShuffling}
+      onSubmitCardSelection={reading.submitCardSelection}
+      onFinishDrawing={reading.finishDrawing}
+      onRevealCard={reading.revealCard}
+      onAdvanceToNextCard={reading.advanceToNextCard}
+      onGoToCard={reading.goToCard}
+      onRestart={reading.restartReading}
+      setOnAssistantMessage={reading.setOnAssistantMessage}
     />
   );
 }
-
-export default function ReadingRoomPage() {
-  return (
-    <Suspense fallback={<div style={styles.loadingScreen}>Entering the sanctuary...</div>}>
-      <ReadingRoomContent />
-    </Suspense>
-  );
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  loadingScreen: {
-    width: '100vw',
-    height: '100vh',
-    backgroundColor: '#030308',
-    color: '#e6c262',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontFamily: 'var(--font-heading)',
-    fontSize: '1.2rem',
-    letterSpacing: '0.2em',
-  },
-};
