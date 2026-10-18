@@ -40,6 +40,7 @@ const DialogueText = memo(function DialogueText({ text, isTyping, streamStore, p
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const lastAutoScrollTop = useRef(0);
   const wasTyping = useRef(false);
 
   const content = isTyping ? streamed : text;
@@ -47,7 +48,11 @@ const DialogueText = memo(function DialogueText({ text, isTyping, streamStore, p
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) {
+      stickToBottom.current = true; // back at the bottom: follow new text again
+    } else if (el.scrollTop < lastAutoScrollTop.current - 2) {
+      stickToBottom.current = false; // the reader scrolled up on purpose
+    }
   }, []);
 
   useLayoutEffect(() => {
@@ -58,12 +63,15 @@ const DialogueText = memo(function DialogueText({ text, isTyping, streamStore, p
         // A new reply started: begin at the top and follow it as it grows.
         stickToBottom.current = true;
         el.scrollTop = 0;
+        lastAutoScrollTop.current = 0;
       } else if (stickToBottom.current) {
         el.scrollTop = el.scrollHeight;
+        lastAutoScrollTop.current = el.scrollTop;
       }
     } else if (!wasTyping.current) {
       // Switched to a different finished message (e.g. another card): show its start.
       el.scrollTop = 0;
+      lastAutoScrollTop.current = 0;
     }
     wasTyping.current = isTyping;
   }, [content, isTyping]);
@@ -141,9 +149,9 @@ export interface DialoguePanelProps {
 }
 
 const PLACEHOLDERS: Partial<Record<ReadingPhase, string>> = {
-  intention: 'State your question or seek general guidance...',
-  card_chat: 'Ask about this card, or move on when ready...',
-  follow_up: 'Ask a follow-up question, or say thank you to close...',
+  intention: 'Share your question…',
+  card_chat: 'Ask about this card…',
+  follow_up: 'Ask a follow-up, or say thanks…',
 };
 
 function DialoguePanelBase({

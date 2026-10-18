@@ -1103,7 +1103,7 @@ a {
   }
 
   .tarot-card--large {
-    --card-w: clamp(90px, calc(28dvh * 0.5775), 200px);
+    --card-w: clamp(72px, calc(21dvh * 0.5775), 180px);
   }
 
   .vn-dialogue-panel--expanded {
@@ -1114,8 +1114,21 @@ a {
 
 @media (max-width: 480px) {
   .vn-topbar {
+    flex-wrap: nowrap;
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
+  }
+
+  .vn-exit-btn__long {
+    display: none;
+  }
+
+  .mini-card-slot {
+    width: 22px;
+  }
+
+  .vn-reading-layout .tarot-card__caption {
+    display: none; /* card name is visible on the card art and in the reader text */
   }
 
   .vn-send-btn {

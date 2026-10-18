@@ -144,8 +144,8 @@ export function VisualNovelScene({
       <Ambience />
 
       <header className="vn-topbar">
-        <Link href="/" className="vn-exit-btn">
-          ✦ Exit Sanctuary
+        <Link href="/" className="vn-exit-btn" aria-label="Exit Sanctuary">
+          ✦ Exit<span className="vn-exit-btn__long"> Sanctuary</span>
         </Link>
 
         <div className="vn-topbar__right">
