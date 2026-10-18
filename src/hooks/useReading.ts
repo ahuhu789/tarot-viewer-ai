@@ -156,7 +156,7 @@ export function useReading() {
     const userMsg: ChatMessage = {
       id: `user-select-${Date.now()}`,
       role: 'user',
-      content: `I select the ${spreadId === 'single' ? 'Daily Draw' : spreadId === 'three' ? 'Past, Present & Future' : 'Celtic Cross'} spread.`,
+      content: `I select the ${spreadId === 'single' ? 'Daily Draw' : 'Past, Present & Future'} spread.`,
       timestamp: new Date().toISOString(),
     };
 

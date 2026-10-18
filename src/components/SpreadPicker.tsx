@@ -107,31 +107,6 @@ const SPREADS_LIST = [
       </div>
     ),
   },
-  {
-    id: 'celtic' as const,
-    name: 'The Celtic Cross',
-    description: 'A deep dive into your situation. Evaluates internal stance, conscious ideas, environmental factors, and final outcomes.',
-    layout: '10 Cards',
-    preview: (
-      <div style={{ ...styles.previewGrid, display: 'flex', gap: '8px', justifyContent: 'center' }}>
-        {/* Cross representation */}
-        <div style={{ position: 'relative', width: '32px', height: '32px' }}>
-          <div style={{ ...styles.previewBox, position: 'absolute', top: '0', left: '11px', width: '10px', height: '10px' }} />
-          <div style={{ ...styles.previewBox, position: 'absolute', top: '11px', left: '0', width: '10px', height: '10px' }} />
-          <div style={{ ...styles.previewBox, position: 'absolute', top: '11px', left: '11px', width: '10px', height: '10px', backgroundColor: 'var(--gold-primary)' }} />
-          <div style={{ ...styles.previewBox, position: 'absolute', top: '11px', left: '22px', width: '10px', height: '10px' }} />
-          <div style={{ ...styles.previewBox, position: 'absolute', top: '22px', left: '11px', width: '10px', height: '10px' }} />
-        </div>
-        {/* Staff representation */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <div style={{ ...styles.previewBox, width: '8px', height: '8px' }} />
-          <div style={{ ...styles.previewBox, width: '8px', height: '8px' }} />
-          <div style={{ ...styles.previewBox, width: '8px', height: '8px' }} />
-          <div style={{ ...styles.previewBox, width: '8px', height: '8px' }} />
-        </div>
-      </div>
-    ),
-  },
 ];
 
 export const SpreadPicker: React.FC<SpreadPickerProps> = ({ onSelect }) => {

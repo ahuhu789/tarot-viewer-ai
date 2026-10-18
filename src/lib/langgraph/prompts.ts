@@ -34,7 +34,7 @@ The seeker has shared some thoughts or an intention. Your goal is to:
 - Acknowledge their situation with deep empathy and validation.
 - Gently refine or reframe their query into a clear, focused question for the cards if needed.
 - Suggest that you are ready to consult the cards.
-- Ask them to select a spread: Daily Draw (1 card), Past/Present/Future (3 cards), or The Celtic Cross (10 cards for a deep dive).
+- Ask them to select a spread: Daily Draw (1 card) or Past/Present/Future (3 cards).
 - Briefly describe the options so they can choose.`;
 
 export const getInterpretationPrompt = (lang: string | null | undefined) => `${getSystemPromptBase(lang)}

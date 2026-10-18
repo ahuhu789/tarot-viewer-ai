@@ -13,7 +13,7 @@ export interface TarotCard {
   guideUrl: string;
 }
 
-export type SpreadId = 'single' | 'three' | 'celtic';
+export type SpreadId = 'single' | 'three';
 
 export interface SpreadPosition {
   name: string;
