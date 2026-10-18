@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { ChatMessage, TarotReadingState, ReadingPhase, DrawnCard, SpreadId } from '@/types/tarot';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChatMessage, TarotReadingState, SpreadId } from '@/types/tarot';
+import { createTextStream, TextStream } from '@/lib/text-stream';
 
 const INITIAL_STATE: TarotReadingState = {
   phase: 'greeting',
@@ -15,242 +16,327 @@ const INITIAL_STATE: TarotReadingState = {
   detectedLanguage: '',
 };
 
+const DEFAULT_ERROR = 'The connection to the reader was interrupted. Please try again.';
+
+export interface ReadingError {
+  message: string;
+  canRetry: boolean;
+}
+
+type AssistantListener = ((text: string) => void) | null;
+
+/** What to repeat when the user presses Retry. */
+type RetryAction =
+  | { kind: 'reading'; messages: ChatMessage[]; override?: Partial<TarotReadingState> }
+  | { kind: 'draw' };
+
+let idCounter = 0;
+const newId = (prefix: string) => `${prefix}-${Date.now()}-${++idCounter}`;
+
+/** Reads a JSON `{ error }` body if there is one, otherwise returns the fallback. */
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json();
+    if (data && typeof data.error === 'string') return data.error;
+  } catch {
+    /* not JSON */
+  }
+  if (res.status === 429) return 'Too many requests. Please wait a moment and try again.';
+  return fallback;
+}
+
 export function useReading() {
-  const [state, setState] = useState<TarotReadingState>(INITIAL_STATE);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [typingContent, setTypingContent] = useState<string>('');
+  const [state, setStateRaw] = useState<TarotReadingState>(INITIAL_STATE);
+  const [messages, setMessagesRaw] = useState<ChatMessage[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<ReadingError | null>(null);
+  const [streamStore] = useState<TextStream>(() => createTextStream());
 
-  // Callback when a new completed message is received from AI
-  const onNewMessageCallback = useRef<((text: string) => void) | null>(null);
+  // Refs mirror the latest state so the (stable) callbacks below never read stale values.
+  const stateRef = useRef<TarotReadingState>(INITIAL_STATE);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const retryRef = useRef<RetryAction | null>(null);
+  const assistantListenerRef = useRef<AssistantListener>(null);
 
-  const stateRef = useRef<TarotReadingState>(state);
-  stateRef.current = state;
-
-  // Initialize reading room when the component mounts
-  useEffect(() => {
-    if (messages.length === 0) {
-      triggerReadingStep([]);
-    }
+  const updateState = useCallback((update: (prev: TarotReadingState) => TarotReadingState) => {
+    stateRef.current = update(stateRef.current);
+    setStateRaw(stateRef.current);
   }, []);
 
-  async function triggerReadingStep(currentMessages: ChatMessage[], overrideState?: Partial<TarotReadingState>) {
-    setIsTyping(true);
-    setTypingContent('');
+  const updateMessages = useCallback((update: (prev: ChatMessage[]) => ChatMessage[]) => {
+    messagesRef.current = update(messagesRef.current);
+    setMessagesRaw(messagesRef.current);
+  }, []);
 
-    const currentState = {
-      ...stateRef.current,
-      ...overrideState,
-    };
+  /** Lets the scene register a listener (e.g. text-to-speech) for completed AI replies. */
+  const setOnAssistantMessage = useCallback((listener: AssistantListener) => {
+    assistantListenerRef.current = listener;
+  }, []);
 
-    try {
-      const response = await fetch('/api/reading', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: currentMessages,
-          state: currentState,
-        }),
-      });
+  const runReadingStep = useCallback(
+    async (currentMessages: ChatMessage[], overrideState?: Partial<TarotReadingState>) => {
+      // Only one request at a time: cancel whatever is still streaming.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      retryRef.current = { kind: 'reading', messages: currentMessages, override: overrideState };
 
-      if (!response.ok) {
-        throw new Error('Failed to run reading step');
-      }
+      const requestState = { ...stateRef.current, ...overrideState };
+      setIsTyping(true);
+      setError(null);
+      streamStore.reset();
 
-      if (!response.body) return;
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let currentEvent = '';
       let accumulatedText = '';
+      let streamError: string | null = null;
+      let receivedState = false;
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      try {
+        const response = await fetch('/api/reading', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            // Only conversational turns are sent; local notices never reach the AI.
+            messages: currentMessages
+              .filter((m) => m.role === 'user' || m.role === 'assistant')
+              .map(({ role, content }) => ({ role, content })),
+            state: requestState,
+          }),
+        });
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        if (!response.ok || !response.body) {
+          throw new Error(await readErrorMessage(response, DEFAULT_ERROR));
+        }
 
-        for (const line of lines) {
-          const cleanLine = line.trim();
-          if (cleanLine.startsWith('event: ')) {
-            currentEvent = cleanLine.slice(7).trim();
-          } else if (cleanLine.startsWith('data: ')) {
-            const dataStr = cleanLine.slice(6).trim();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = '';
 
-            if (currentEvent === 'token') {
-              const token = decodeURIComponent(dataStr);
-              accumulatedText += token;
-              setTypingContent((prev) => prev + token);
-            } else if (currentEvent === 'state') {
-              const stateUpdate = JSON.parse(dataStr);
-              setState((prev) => ({
-                ...prev,
-                ...stateUpdate,
-              }));
-            } else if (currentEvent === 'error') {
-              console.error('❌ SSE Stream Error:', decodeURIComponent(dataStr));
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const cleanLine = line.trim();
+            if (cleanLine.startsWith('event: ')) {
+              currentEvent = cleanLine.slice(7).trim();
+            } else if (cleanLine.startsWith('data: ')) {
+              const dataStr = cleanLine.slice(6).trim();
+              if (currentEvent === 'token') {
+                const token = decodeURIComponent(dataStr);
+                accumulatedText += token;
+                streamStore.append(token); // batched per animation frame
+              } else if (currentEvent === 'state') {
+                receivedState = true;
+                const stateUpdate = JSON.parse(dataStr) as Partial<TarotReadingState>;
+                updateState((prev) => ({ ...prev, ...stateUpdate }));
+              } else if (currentEvent === 'error') {
+                streamError = decodeURIComponent(dataStr);
+              }
             }
           }
         }
-      }
+        streamStore.flush();
 
-      // Add the final assistant response to the chat history
-      if (accumulatedText) {
-        const newMsg: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: 'assistant',
-          content: accumulatedText,
-          timestamp: new Date().toISOString(),
-          metadata: {
-            phase: currentState.phase,
-            activeCardIndex: currentState.currentCardIndex,
-          },
-        };
-        setMessages((prev) => [...prev, newMsg]);
+        if (accumulatedText) {
+          const newMsg: ChatMessage = {
+            id: newId('ai'),
+            role: 'assistant',
+            content: accumulatedText,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              phase: requestState.phase,
+              activeCardIndex: requestState.currentCardIndex,
+            },
+          };
+          updateMessages((prev) => [...prev, newMsg]);
+          assistantListenerRef.current?.(accumulatedText);
+        }
 
-        // Trigger voice synthesis callback
-        if (onNewMessageCallback.current) {
-          onNewMessageCallback.current(accumulatedText);
+        if (streamError) {
+          setError({ message: streamError, canRetry: true });
+        } else if (!accumulatedText && !receivedState) {
+          setError({ message: DEFAULT_ERROR, canRetry: true });
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return; // superseded or unmounted: not an error
+        console.error('❌ Reading request failed:', err);
+        setError({
+          message: err instanceof Error && err.message ? err.message : DEFAULT_ERROR,
+          canRetry: true,
+        });
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setIsTyping(false);
+          streamStore.reset();
         }
       }
-    } catch (error) {
-      console.error('❌ Error sending reading request:', error);
-      setMessages((prev) => [
+    },
+    [streamStore, updateMessages, updateState],
+  );
+
+  // Start the session once. In React Strict Mode the effect runs twice in dev;
+  // the cleanup aborts the first request so only one greeting is generated.
+  useEffect(() => {
+    // Starting a network request on mount is a legitimate effect (syncing with the
+    // server); the synchronous setState calls only mark the request as in-flight.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void runReadingStep([]);
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, [runReadingStep]);
+
+  const sendMessage = useCallback(
+    async (content: string) => {
+      const text = content.trim();
+      if (!text || abortRef.current) return;
+      const userMsg: ChatMessage = {
+        id: newId('user'),
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString(),
+      };
+      updateMessages((prev) => [...prev, userMsg]);
+      await runReadingStep(messagesRef.current);
+    },
+    [runReadingStep, updateMessages],
+  );
+
+  const selectSpread = useCallback(
+    (spreadId: SpreadId) => {
+      updateState((prev) => ({ ...prev, selectedSpread: spreadId, phase: 'shuffling' }));
+      updateMessages((prev) => [
         ...prev,
         {
-          id: `error-${Date.now()}`,
-          role: 'system',
-          content: 'Connection lost. Please try again.',
+          id: newId('user-select'),
+          role: 'user',
+          content: `I select the ${spreadId === 'single' ? 'Daily Draw' : 'Past, Present & Future'} spread.`,
           timestamp: new Date().toISOString(),
         },
       ]);
-    } finally {
-      setIsTyping(false);
-      setTypingContent('');
-    }
-  }
+    },
+    [updateMessages, updateState],
+  );
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || isTyping) return;
+  const finishShuffling = useCallback(() => {
+    updateState((prev) => ({ ...prev, phase: 'manual_selection' }));
+  }, [updateState]);
 
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString(),
-    };
-
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-
-    // Run the next phase in the graph
-    await triggerReadingStep(updatedMessages);
-  };
-
-  const selectSpread = async (spreadId: SpreadId) => {
-    setState((prev) => ({ ...prev, selectedSpread: spreadId, phase: 'shuffling' }));
-
-    const userMsg: ChatMessage = {
-      id: `user-select-${Date.now()}`,
-      role: 'user',
-      content: `I select the ${spreadId === 'single' ? 'Daily Draw' : 'Past, Present & Future'} spread.`,
-      timestamp: new Date().toISOString(),
-    };
-
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-  };
-
-  const finishShuffling = () => {
-    setState((prev) => ({ ...prev, phase: 'manual_selection' }));
-  };
-
-  const submitCardSelection = async () => {
-    if (!state.selectedSpread) return;
-    
+  const submitCardSelection = useCallback(async () => {
+    const spreadId = stateRef.current.selectedSpread;
+    if (!spreadId) return;
+    setError(null);
     try {
       const res = await fetch('/api/reading/draw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spreadId: state.selectedSpread }),
+        body: JSON.stringify({ spreadId }),
       });
+      if (!res.ok) throw new Error(await readErrorMessage(res, 'Could not draw the cards.'));
       const data = await res.json();
-
-      if (data.drawnCards) {
-        setState((prev) => ({
-          ...prev,
-          drawnCards: data.drawnCards,
-          phase: 'drawing',
-        }));
-      }
+      if (!Array.isArray(data.drawnCards)) throw new Error('Could not draw the cards.');
+      updateState((prev) => ({ ...prev, drawnCards: data.drawnCards, phase: 'drawing' }));
     } catch (e) {
       console.error('❌ Error drawing cards:', e);
-    }
-  };
-
-  const finishDrawing = async () => {
-    setState((prev) => ({ ...prev, phase: 'interpreting', currentCardIndex: 0 }));
-    await triggerReadingStep(messages, { phase: 'interpreting', currentCardIndex: 0 });
-  };
-
-  // Advances to the next card or synthesis phase
-  const advanceToNextCard = async () => {
-    const nextIndex = state.currentCardIndex + 1;
-    const isFinished = nextIndex >= state.drawnCards.length;
-
-    if (isFinished) {
-      // Transition to final synthesis
-      setState((prev) => ({ ...prev, phase: 'synthesis' }));
-      await triggerReadingStep(messages, { phase: 'synthesis' });
-    } else {
-      // Transition to next card interpretation
-      setState((prev) => ({ 
-        ...prev, 
-        phase: 'interpreting', 
-        currentCardIndex: nextIndex,
-        highestCardIndexReached: Math.max(prev.highestCardIndexReached, nextIndex)
-      }));
-      await triggerReadingStep(messages, { 
-        phase: 'interpreting', 
-        currentCardIndex: nextIndex,
-        highestCardIndexReached: Math.max(state.highestCardIndexReached, nextIndex)
+      retryRef.current = { kind: 'draw' };
+      setError({
+        message: e instanceof Error && e.message ? e.message : 'Could not draw the cards.',
+        canRetry: true,
       });
     }
-  };
+  }, [updateState]);
 
-  const goToCard = (index: number) => {
-    if (index >= 0 && index <= state.highestCardIndexReached) {
-      setState((prev) => ({ ...prev, currentCardIndex: index, phase: 'interpreting' }));
+  const finishDrawing = useCallback(async () => {
+    const override = { phase: 'interpreting' as const, currentCardIndex: 0, highestCardIndexReached: 0 };
+    updateState((prev) => ({ ...prev, ...override }));
+    await runReadingStep(messagesRef.current, override);
+  }, [runReadingStep, updateState]);
+
+  const goToCard = useCallback(
+    (index: number) => {
+      const s = stateRef.current;
+      if (index < 0 || index > s.highestCardIndexReached || index >= s.drawnCards.length) return;
+      // 'card_chat' (not 'interpreting') so a follow-up question chats about this
+      // card instead of re-running the interpretation.
+      updateState((prev) => ({ ...prev, currentCardIndex: index, phase: 'card_chat' }));
+    },
+    [updateState],
+  );
+
+  const advanceToNextCard = useCallback(async () => {
+    const s = stateRef.current;
+    const nextIndex = s.currentCardIndex + 1;
+
+    if (nextIndex >= s.drawnCards.length) {
+      updateState((prev) => ({ ...prev, phase: 'synthesis' }));
+      await runReadingStep(messagesRef.current, { phase: 'synthesis' });
+      return;
     }
-  };
 
-  const revealCard = (index: number) => {
-    setState((prev) => {
-      const updated = prev.drawnCards.map((c) =>
-        c.positionIndex === index ? { ...c, isRevealed: true } : c
-      );
-      return { ...prev, drawnCards: updated };
-    });
-  };
+    // Already interpreted (user navigated back): just move forward.
+    if (nextIndex <= s.highestCardIndexReached) {
+      goToCard(nextIndex);
+      return;
+    }
 
-  const restartReading = () => {
-    setState(INITIAL_STATE);
-    setMessages([]);
-    setTypingContent('');
-    setIsTyping(false);
-    setTimeout(() => {
-      triggerReadingStep([]);
-    }, 100);
-  };
+    const override = {
+      phase: 'interpreting' as const,
+      currentCardIndex: nextIndex,
+      highestCardIndexReached: nextIndex,
+    };
+    updateState((prev) => ({ ...prev, ...override }));
+    await runReadingStep(messagesRef.current, override);
+  }, [goToCard, runReadingStep, updateState]);
+
+  const revealCard = useCallback(
+    (index: number) => {
+      updateState((prev) => ({
+        ...prev,
+        drawnCards: prev.drawnCards.map((c) =>
+          c.positionIndex === index ? { ...c, isRevealed: true } : c,
+        ),
+      }));
+    },
+    [updateState],
+  );
+
+  const restartReading = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    stateRef.current = INITIAL_STATE;
+    messagesRef.current = [];
+    setStateRaw(INITIAL_STATE);
+    setMessagesRaw([]);
+    setError(null);
+    void runReadingStep([]);
+  }, [runReadingStep]);
+
+  const retry = useCallback(() => {
+    const action = retryRef.current;
+    if (!action) return;
+    if (action.kind === 'draw') void submitCardSelection();
+    else void runReadingStep(action.messages, action.override);
+  }, [runReadingStep, submitCardSelection]);
+
+  const dismissError = useCallback(() => setError(null), []);
 
   return {
     state,
     messages,
     isTyping,
-    typingContent,
+    streamStore,
+    error,
+    retry,
+    dismissError,
     sendMessage,
     selectSpread,
     finishShuffling,
@@ -260,6 +346,6 @@ export function useReading() {
     advanceToNextCard,
     goToCard,
     restartReading,
-    onNewMessageCallback,
+    setOnAssistantMessage,
   };
 }

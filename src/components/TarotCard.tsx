@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import Image from 'next/image';
 import { CARD_BACK_URL, cardImageUrl } from '@/lib/cards';
+
+export type CardSize = 'small' | 'medium' | 'large';
 
 interface TarotCardProps {
   cardNumber: number;
@@ -10,125 +12,97 @@ interface TarotCardProps {
   isReversed: boolean;
   isRevealed: boolean;
   isActive: boolean;
-  onReveal: () => void;
+  /** Position of this card in the spread; passed back to onReveal so callers can pass a stable callback. */
+  index: number;
+  onReveal: (index: number) => void;
   positionName?: string;
   positionDescription?: string;
-  size?: 'small' | 'medium' | 'large';
+  size?: CardSize;
   hideLabels?: boolean;
 }
 
-export const TarotCard: React.FC<TarotCardProps> = ({
+// Rendered widths are controlled by CSS (see .tarot-card--* in globals.css);
+// these values are only hints for next/image's srcset selection.
+const IMAGE_SIZES: Record<CardSize, string> = {
+  small: '32px',
+  medium: '(max-width: 600px) 26vw, 130px',
+  large: '(max-width: 900px) 40vw, 260px',
+};
+
+function TarotCardBase({
   cardNumber,
   cardName,
   isReversed,
   isRevealed,
   isActive,
+  index,
   onReveal,
   positionName = '',
   positionDescription = '',
   size = 'medium',
   hideLabels = false,
-}) => {
-  const frontImageUrl = cardImageUrl(cardNumber);
-  const backImageUrl = CARD_BACK_URL;
+}: TarotCardProps) {
+  const showLabels = !hideLabels && size !== 'small';
+  const orientation = isReversed ? 'reversed' : 'upright';
 
-  const handleFlip = () => {
-    if (!isRevealed) {
-      onReveal();
-    }
-  };
+  const handleFlip = useCallback(() => {
+    if (!isRevealed) onReveal(index);
+  }, [index, isRevealed, onReveal]);
 
-  // Set card dimensions
-  const dims = {
-    small: { w: 32, h: 54, perspective: '300px' },
-    medium: { w: 130, h: 220, perspective: '1000px' },
-    large: { w: 260, h: 440, perspective: '1500px' },
-  }[size];
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleFlip();
+      }
+    },
+    [handleFlip],
+  );
+
+  const label = isRevealed
+    ? `${positionName ? positionName + ': ' : ''}${cardName || 'Card'} (${orientation})`
+    : `${positionName ? positionName + ': ' : ''}face-down card, press to reveal`;
 
   return (
-    <div style={{ ...styles.cardContainer, width: `${dims.w}px` }}>
-      {positionName && !hideLabels && size !== 'small' && (
-        <div style={styles.positionLabel}>{positionName}</div>
+    <div className={`tarot-card tarot-card--${size}`}>
+      {positionName && showLabels && (
+        <div className="tarot-card__position" title={positionName}>
+          {positionName}
+        </div>
       )}
 
       <div
-        style={{
-          perspective: dims.perspective,
-          width: `${dims.w}px`,
-          height: `${dims.h}px`,
-        }}
+        className={`tarot-card__scene ${isActive ? 'is-active' : ''}`}
         onClick={handleFlip}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={isRevealed ? -1 : 0}
+        aria-label={label}
+        aria-pressed={isRevealed}
       >
-        <div
-          className={`card-inner ${isRevealed ? 'is-flipped' : ''} ${isReversed ? 'is-reversed-card' : ''
-            }`}
-          style={{ width: '100%', height: '100%' }}
-        >
-          {/* Card Back Face */}
+        <div className={`card-inner ${isRevealed ? 'is-flipped' : ''} ${isReversed ? 'is-reversed-card' : ''}`}>
           <div className="card-face card-back">
-            <Image
-              src={backImageUrl}
-              alt="Card Back"
-              fill
-              sizes={`${dims.w}px`}
-              style={styles.image}
-              priority
-            />
+            <Image src={CARD_BACK_URL} alt="" fill sizes={IMAGE_SIZES[size]} className="card-image" />
           </div>
-
-          {/* Card Front Face */}
-          <div
-            className={`card-face card-front ${isActive ? 'card-pulse-active' : ''}`}
-            title={`${cardName} (${isReversed ? 'Reversed' : 'Upright'})`}
-          >
+          <div className="card-face card-front" title={`${cardName} (${orientation})`}>
             <Image
-              src={frontImageUrl}
-              alt={cardName}
+              src={cardImageUrl(cardNumber)}
+              alt={isRevealed ? `${cardName} (${orientation})` : ''}
               fill
-              sizes={`${dims.w}px`}
-              style={styles.image}
+              sizes={IMAGE_SIZES[size]}
+              className="card-image"
             />
           </div>
         </div>
       </div>
 
-      {positionDescription && !hideLabels && size !== 'small' && (
-        <div style={styles.descriptionLabel} title={positionDescription}>
-          {isRevealed ? cardName : 'Click to Flip'}
+      {positionDescription && showLabels && (
+        <div className="tarot-card__caption" title={positionDescription}>
+          {isRevealed ? cardName : 'Tap to reveal'}
         </div>
       )}
     </div>
   );
-};
+}
 
-const styles: Record<string, React.CSSProperties> = {
-  cardContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '0.4rem',
-  },
-  positionLabel: {
-    fontFamily: 'var(--font-heading)',
-    fontSize: '0.75rem',
-    letterSpacing: '0.1em',
-    color: 'var(--gold-primary)',
-    textAlign: 'center',
-    width: '100%',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  descriptionLabel: {
-    fontFamily: 'var(--font-ui)',
-    fontSize: '0.7rem',
-    color: 'var(--text-muted)',
-    textAlign: 'center',
-    cursor: 'pointer',
-    width: '100%',
-  },
-  image: {
-    objectFit: 'cover',
-    borderRadius: '8px',
-  },
-};
+export const TarotCard = memo(TarotCardBase);

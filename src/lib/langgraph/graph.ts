@@ -2,7 +2,7 @@ import { StateGraph, START, END } from '@langchain/langgraph';
 import { SystemMessage, AIMessage, HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { TarotReadingAnnotation } from './state';
 import { getModel, INTERNAL_TAG } from './model';
-import { LIMITS } from '@/lib/validation';
+import { LIMITS } from '@/lib/limits';
 import { getCardByNumber } from '../csv-parser';
 import { SPREADS } from '@/data/spreads';
 import {

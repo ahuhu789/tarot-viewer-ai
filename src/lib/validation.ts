@@ -1,12 +1,7 @@
 import { z } from 'zod';
+import { LIMITS } from './limits';
 
-/** Hard limits for anything the browser sends to the AI / TTS routes. */
-export const LIMITS = {
-  messageChars: 2000,
-  messages: 60,
-  intentionChars: 600,
-  ttsChars: 2500,
-} as const;
+export { LIMITS };
 
 const phaseSchema = z.enum([
   'greeting',
