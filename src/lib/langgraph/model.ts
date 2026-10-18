@@ -31,6 +31,11 @@ export function getModel(): ChatOpenAI {
     temperature: 0.7,
     streaming: true,
     apiKey,
+    // Optional: lets thinking models (e.g. Gemini) skip hidden reasoning so the
+    // whole token budget goes to the visible reply. Values: none | low | medium | high.
+    ...(process.env.AI_REASONING_EFFORT
+      ? { modelKwargs: { reasoning_effort: process.env.AI_REASONING_EFFORT } }
+      : {}),
     configuration: {
       baseURL: process.env.ALIBABA_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     },
