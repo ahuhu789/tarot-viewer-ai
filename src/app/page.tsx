@@ -15,13 +15,13 @@ export default function Home() {
         </div>
         <h1 className="landing__title">TAROT SANCTUARY</h1>
         <p className="landing__intro">
-          A quiet space for contemplation.
+          Một không gian tĩnh lặng để chiêm nghiệm.
           <br />
-          Pause, clear your mind, and ask the cards for clarity.
+          Dừng lại, thả lỏng tâm trí và hỏi các lá bài để nhìn rõ hơn.
         </p>
-        <p className="landing__hint">Speak in your own language — the cards will understand.</p>
+        <p className="landing__hint">Bạn có thể trò chuyện bằng tiếng Việt hoặc tiếng Anh · You can also write in English.</p>
         <Link href="/reading" className="btn-gold landing__cta">
-          Enter the Sanctuary
+          Bước vào phòng đọc bài
         </Link>
       </div>
     </main>

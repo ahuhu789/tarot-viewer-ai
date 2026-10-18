@@ -64,10 +64,9 @@ const DialogueText = memo(function DialogueText({ text, isTyping, streamStore, p
         stickToBottom.current = true;
         el.scrollTop = 0;
         lastAutoScrollTop.current = 0;
-      } else if (stickToBottom.current) {
-        el.scrollTop = el.scrollHeight;
-        lastAutoScrollTop.current = el.scrollTop;
       }
+      // No auto-follow: replies stream in about a second and are read (and spoken)
+      // from the top, where the server-rendered card heading is.
     } else if (!wasTyping.current) {
       // Switched to a different finished message (e.g. another card): show its start.
       el.scrollTop = 0;
@@ -119,11 +118,11 @@ const DialogueInput = memo(function DialogueInput({
         disabled={disabled}
         maxLength={LIMITS.messageChars}
         placeholder={placeholder}
-        aria-label="Your message to the reader"
+        aria-label="Tin nhắn gửi người đọc bài"
         className="vn-text-input"
       />
       <button type="submit" className="btn-gold vn-send-btn" disabled={!canSend}>
-        ✦ Send
+        ✦ Gửi
       </button>
     </form>
   );
@@ -140,6 +139,12 @@ export interface DialoguePanelProps {
   revealedCount: number;
   totalCards: number;
   isLastCard: boolean;
+  /** Position name of the next card ("Hiện tại"), for the advance button. */
+  nextPositionName?: string;
+  /** Status line while waiting (e.g. AI rate limit). */
+  notice?: string | null;
+  voiceEnabled?: boolean;
+  onReplay?: () => void;
   onSend: (text: string) => void;
   onRetry: () => void;
   onDismissError: () => void;
@@ -149,9 +154,9 @@ export interface DialoguePanelProps {
 }
 
 const PLACEHOLDERS: Partial<Record<ReadingPhase, string>> = {
-  intention: 'Share your question…',
-  card_chat: 'Ask about this card…',
-  follow_up: 'Ask a follow-up, or say thanks…',
+  intention: 'Chia sẻ điều bạn đang trăn trở…',
+  card_chat: 'Hỏi thêm về lá này…',
+  follow_up: 'Hỏi thêm về trải bài, hoặc nói “cảm ơn” để kết thúc…',
 };
 
 function DialoguePanelBase({
@@ -165,6 +170,10 @@ function DialoguePanelBase({
   revealedCount,
   totalCards,
   isLastCard,
+  nextPositionName,
+  notice,
+  voiceEnabled,
+  onReplay,
   onSend,
   onRetry,
   onDismissError,
@@ -178,16 +187,28 @@ function DialoguePanelBase({
   return (
     <section
       className={`vn-dialogue-panel vn-dialogue-panel--${layout} ${isSpeaking ? 'speaker-active' : ''}`}
-      aria-label="Conversation with the card reader"
+      aria-label="Trò chuyện với người đọc bài"
     >
-      <div className="vn-name-box">🌙 The Card Reader</div>
+      <div className="vn-name-row">
+        <div className="vn-name-box">🌙 Người đọc bài</div>
+        {voiceEnabled && onReplay && !isTyping && text && (
+          <button type="button" className="vn-replay-btn" onClick={onReplay} aria-label="Nghe lại">
+            {isSpeaking ? '■ Dừng' : '↻ Nghe lại'}
+          </button>
+        )}
+      </div>
 
       <DialogueText
         text={text}
         isTyping={isTyping}
         streamStore={streamStore}
-        placeholder={isTyping ? 'Whispering to the cards...' : 'Welcoming your presence...'}
+        placeholder={notice || (isTyping ? 'Đang lắng nghe các lá bài…' : 'Chào mừng bạn…')}
       />
+      {notice && isTyping && (
+        <div className="vn-notice" role="status">
+          {notice}
+        </div>
+      )}
 
       {error && (
         <div className="vn-error" role="alert">
@@ -195,10 +216,10 @@ function DialoguePanelBase({
           <div className="vn-error__actions">
             {error.canRetry && (
               <button type="button" className="vn-error__retry" onClick={onRetry}>
-                Retry
+                Thử lại
               </button>
             )}
-            <button type="button" className="vn-error__dismiss" onClick={onDismissError} aria-label="Dismiss">
+            <button type="button" className="vn-error__dismiss" onClick={onDismissError} aria-label="Đóng">
               ✕
             </button>
           </div>
@@ -211,22 +232,32 @@ function DialoguePanelBase({
         <div className="vn-buttons-row">
           {phase === 'drawing' && allRevealed && (
             <button type="button" onClick={onFinishDrawing} className="btn-gold vn-action-btn">
-              Begin Interpretation ✦
+              Bắt đầu giải bài ✦
             </button>
           )}
           {phase === 'drawing' && !allRevealed && (
             <div className="vn-hint">
-              Reveal all cards to begin ({revealedCount}/{totalCards} revealed)
+              {totalCards > 1
+                ? `Lật lần lượt từng lá theo thứ tự (${revealedCount}/${totalCards})`
+                : 'Chạm vào lá bài để lật'}
             </div>
           )}
           {phase === 'card_chat' && (
             <button type="button" onClick={onAdvance} className="btn-gold vn-action-btn" disabled={isTyping}>
-              {isLastCard ? 'Request Final Synthesis ✦' : 'Move to Next Card ➔'}
+              {isLastCard
+                ? totalCards > 1
+                  ? 'Xem tổng hợp trải bài ✦'
+                  : 'Hoàn tất trải bài ✦'
+                : `Lá tiếp theo${nextPositionName ? `: ${nextPositionName}` : ''} ➔`}
             </button>
           )}
-          {phase === 'closing' && !isTyping && (
-            <button type="button" onClick={onRestart} className="btn-gold vn-action-btn">
-              Begin Another Journey ✦
+          {(phase === 'closing' || phase === 'follow_up') && !isTyping && (
+            <button
+              type="button"
+              onClick={onRestart}
+              className={phase === 'closing' ? 'btn-gold vn-action-btn' : 'vn-secondary-btn'}
+            >
+              Bắt đầu hành trình mới ✦
             </button>
           )}
         </div>

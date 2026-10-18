@@ -3,12 +3,12 @@
 import React, { memo, useCallback } from 'react';
 import Image from 'next/image';
 import { CARD_BACK_URL, cardImageUrl } from '@/lib/cards';
+import { cardNameEn, cardNameVi } from '@/data/card-names';
 
 export type CardSize = 'small' | 'medium' | 'large';
 
 interface TarotCardProps {
   cardNumber: number;
-  cardName: string;
   isReversed: boolean;
   isRevealed: boolean;
   isActive: boolean;
@@ -16,7 +16,12 @@ interface TarotCardProps {
   index: number;
   onReveal: (index: number) => void;
   positionName?: string;
-  positionDescription?: string;
+  /** "1/3" badge in multi-card spreads. */
+  positionBadge?: string;
+  /** Face-down and not yet allowed to be turned (cards are revealed in reading order). */
+  locked?: boolean;
+  /** The next card to reveal: highlighted. */
+  isNext?: boolean;
   size?: CardSize;
   hideLabels?: boolean;
 }
@@ -31,23 +36,27 @@ const IMAGE_SIZES: Record<CardSize, string> = {
 
 function TarotCardBase({
   cardNumber,
-  cardName,
   isReversed,
   isRevealed,
   isActive,
   index,
   onReveal,
   positionName = '',
-  positionDescription = '',
+  positionBadge = '',
+  locked = false,
+  isNext = false,
   size = 'medium',
   hideLabels = false,
 }: TarotCardProps) {
   const showLabels = !hideLabels && size !== 'small';
-  const orientation = isReversed ? 'reversed' : 'upright';
+  const orientation = isReversed ? 'Ngược' : 'Xuôi';
+  const nameVi = cardNameVi(cardNumber);
+  const nameEn = cardNameEn(cardNumber);
+  const canFlip = !isRevealed && !locked;
 
   const handleFlip = useCallback(() => {
-    if (!isRevealed) onReveal(index);
-  }, [index, isRevealed, onReveal]);
+    if (canFlip) onReveal(index);
+  }, [canFlip, index, onReveal]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -59,46 +68,63 @@ function TarotCardBase({
     [handleFlip],
   );
 
+  const where = positionName ? `${positionName}: ` : '';
   const label = isRevealed
-    ? `${positionName ? positionName + ': ' : ''}${cardName || 'Card'} (${orientation})`
-    : `${positionName ? positionName + ': ' : ''}face-down card, press to reveal`;
+    ? `${where}${nameVi} (${nameEn}), ${orientation.toLowerCase()}`
+    : locked
+      ? `${where}lá úp, hãy lật các lá trước theo thứ tự`
+      : `${where}lá úp, nhấn để lật`;
 
   return (
     <div className={`tarot-card tarot-card--${size}`}>
       {positionName && showLabels && (
         <div className="tarot-card__position" title={positionName}>
+          {positionBadge && <span className="tarot-card__badge">{positionBadge}</span>}
           {positionName}
         </div>
       )}
 
       <div
-        className={`tarot-card__scene ${isActive ? 'is-active' : ''}`}
+        className={`tarot-card__scene ${isActive ? 'is-active' : ''} ${isNext && !isRevealed ? 'is-next' : ''} ${locked && !isRevealed ? 'is-locked' : ''}`}
         onClick={handleFlip}
         onKeyDown={handleKeyDown}
         role="button"
-        tabIndex={isRevealed ? -1 : 0}
+        tabIndex={canFlip ? 0 : -1}
         aria-label={label}
+        aria-disabled={!canFlip}
         aria-pressed={isRevealed}
       >
         <div className={`card-inner ${isRevealed ? 'is-flipped' : ''} ${isReversed ? 'is-reversed-card' : ''}`}>
           <div className="card-face card-back">
             <Image src={CARD_BACK_URL} alt="" fill sizes={IMAGE_SIZES[size]} className="card-image" />
           </div>
-          <div className="card-face card-front" title={`${cardName} (${orientation})`}>
-            <Image
-              src={cardImageUrl(cardNumber)}
-              alt={isRevealed ? `${cardName} (${orientation})` : ''}
-              fill
-              sizes={IMAGE_SIZES[size]}
-              className="card-image"
-            />
+          <div className="card-face card-front">
+            {isRevealed && (
+              <Image
+                src={cardImageUrl(cardNumber)}
+                alt={`${nameVi} (${nameEn}), ${orientation.toLowerCase()}`}
+                fill
+                sizes={IMAGE_SIZES[size]}
+                className="card-image"
+              />
+            )}
           </div>
         </div>
       </div>
 
-      {positionDescription && showLabels && (
-        <div className="tarot-card__caption" title={positionDescription}>
-          {isRevealed ? cardName : 'Tap to reveal'}
+      {showLabels && (
+        <div className="tarot-card__caption" aria-hidden={!isRevealed}>
+          {isRevealed ? (
+            <>
+              <span className="tarot-card__name">{nameVi}</span>
+              <span className="tarot-card__name-en">{nameEn}</span>
+              <span className={`tarot-card__orient ${isReversed ? 'is-reversed' : ''}`}>{orientation}</span>
+            </>
+          ) : locked ? (
+            'Chờ lượt'
+          ) : (
+            'Chạm để lật'
+          )}
         </div>
       )}
     </div>

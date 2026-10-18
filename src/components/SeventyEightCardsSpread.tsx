@@ -16,7 +16,8 @@ const DECK_SIZE = 78;
 export function SeventyEightCardsSpread({ spreadId, onSelectComplete }: SeventyEightCardsSpreadProps) {
   const [selected, setSelected] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const requiredCount = SPREADS[spreadId]?.positions.length ?? 1;
+  const positions = SPREADS[spreadId]?.positions ?? [];
+  const requiredCount = positions.length || 1;
   const remaining = requiredCount - selected.length;
   const complete = remaining === 0;
 
@@ -47,12 +48,17 @@ export function SeventyEightCardsSpread({ spreadId, onSelectComplete }: SeventyE
   return (
     <div className="pick-panel">
       <p className="pick-prompt" aria-live="polite">
-        {complete ? 'Cards selected. Confirm to proceed.' : `Select ${remaining} more card${remaining > 1 ? 's' : ''}`}
+        {complete
+          ? 'Đã chọn đủ. Xác nhận để lật bài nhé.'
+          : requiredCount > 1
+            ? `Chọn lá cho vị trí ${selected.length + 1} · ${positions[selected.length]?.name ?? ''} (còn ${remaining} lá)`
+            : 'Hãy lắng nghe trực giác và chọn 1 lá'}
       </p>
 
-      <div className="pick-grid" role="group" aria-label="Face-down deck">
+      <div className="pick-grid" role="group" aria-label="Bộ bài úp">
         {Array.from({ length: DECK_SIZE }, (_, i) => {
-          const isSelected = selected.includes(i);
+          const order = selected.indexOf(i);
+          const isSelected = order >= 0;
           return (
             <button
               key={i}
@@ -60,15 +66,17 @@ export function SeventyEightCardsSpread({ spreadId, onSelectComplete }: SeventyE
               className={`pick-card ${isSelected ? 'is-selected' : ''} ${complete && !isSelected ? 'is-dimmed' : ''}`}
               style={{ backgroundImage }}
               aria-pressed={isSelected}
-              aria-label={`Card ${i + 1}`}
+              aria-label={isSelected ? `Lá ${i + 1}, đã chọn cho ${positions[order]?.name ?? ''}` : `Lá ${i + 1}`}
               onClick={() => toggle(i)}
-            />
+            >
+              {isSelected && requiredCount > 1 && <span className="pick-card__order">{order + 1}</span>}
+            </button>
           );
         })}
       </div>
 
       <button type="button" onClick={confirm} className="btn-gold" disabled={!complete || submitting}>
-        Confirm Selection ✦
+        {submitting ? 'Đang rút bài…' : 'Xác nhận ✦'}
       </button>
     </div>
   );

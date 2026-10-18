@@ -1,10 +1,11 @@
 'use client';
 
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo } from 'react';
+import { isVietnamese } from '@/lib/reading-script';
 import Link from 'next/link';
-import { ChatMessage, ReadingPhase, SpreadId, TarotReadingState, TarotCard as TarotCardType } from '@/types/tarot';
+import { ChatMessage, ReadingPhase, SpreadId, TarotReadingState } from '@/types/tarot';
 import type { TextStream } from '@/lib/text-stream';
-import type { ReadingError } from '@/hooks/useReading';
+import type { AssistantListener, ReadingError } from '@/hooks/useReading';
 import { useTTS } from '@/hooks/useTTS';
 import { SpreadPicker } from './SpreadPicker';
 import { CardDeck } from './CardDeck';
@@ -21,7 +22,7 @@ interface VisualNovelSceneProps {
   isTyping: boolean;
   streamStore: TextStream;
   error: ReadingError | null;
-  meaningsByNumber: Map<number, TarotCardType>;
+  notice: string | null;
   onRetry: () => void;
   onDismissError: () => void;
   onSendMessage: (text: string) => void;
@@ -33,7 +34,7 @@ interface VisualNovelSceneProps {
   onAdvanceToNextCard: () => void;
   onGoToCard: (index: number) => void;
   onRestart: () => void;
-  setOnAssistantMessage: (listener: ((text: string) => void) | null) => void;
+  setOnAssistantMessage: (listener: AssistantListener | null) => void;
 }
 
 const READING_PHASES: ReadingPhase[] = ['interpreting', 'card_chat'];
@@ -41,9 +42,9 @@ const SPREAD_VISIBLE_PHASES: ReadingPhase[] = ['drawing', 'synthesis', 'follow_u
 
 /** Local guidance shown while the user is acting on the cards (no AI call in these phases). */
 const PHASE_GUIDANCE: Partial<Record<ReadingPhase, string>> = {
-  shuffling: 'Hold your question in mind, then tap the deck to shuffle.',
-  manual_selection: 'Let your intuition guide you — pick the cards that call to you.',
-  drawing: 'Tap each card to reveal it. When all are face up, we will begin.',
+  shuffling: 'Giữ câu hỏi trong tâm trí, rồi chạm vào bộ bài để xáo.',
+  manual_selection: 'Hãy để trực giác dẫn đường: chọn những lá bài đang gọi bạn. Thứ tự bạn chọn là thứ tự các vị trí.',
+  drawing: 'Lật từng lá theo thứ tự. Khi tất cả đã ngửa, mình sẽ bắt đầu giải bài từ lá đầu tiên.',
 };
 
 /** Decorative background; memoized so it never re-renders. */
@@ -83,7 +84,7 @@ export function VisualNovelScene({
   isTyping,
   streamStore,
   error,
-  meaningsByNumber,
+  notice,
   onRetry,
   onDismissError,
   onSendMessage,
@@ -97,16 +98,18 @@ export function VisualNovelScene({
   onRestart,
   setOnAssistantMessage,
 }: VisualNovelSceneProps) {
-  const { voiceEnabled, isSpeaking, toggleVoice, speak, stopSpeaking } = useTTS();
+  const ttsLanguage = isVietnamese(state.detectedLanguage) ? 'vi' : 'en';
+  const { voiceEnabled, isSpeaking, toggleVoice, speak, stopSpeaking, beginStream, updateStream, endStream } =
+    useTTS(ttsLanguage);
 
-  // Read completed AI replies aloud (when voice is enabled).
+  // Speak AI replies while they stream in (first sentence plays before the reply is complete).
   useEffect(() => {
-    setOnAssistantMessage(speak);
+    setOnAssistantMessage({ begin: beginStream, update: updateStream, end: endStream });
     return () => {
       setOnAssistantMessage(null);
       stopSpeaking();
     };
-  }, [setOnAssistantMessage, speak, stopSpeaking]);
+  }, [setOnAssistantMessage, beginStream, updateStream, endStream, stopSpeaking]);
 
   const { phase, drawnCards, currentCardIndex } = state;
   const activeSpread = SPREADS[state.selectedSpread || 'three'];
@@ -116,6 +119,11 @@ export function VisualNovelScene({
   const isReading = READING_PHASES.includes(phase);
   const activeCard = drawnCards[currentCardIndex];
   const activePosition = activeCard ? activeSpread?.positions[activeCard.positionIndex] : undefined;
+  const nextPosition = activeSpread?.positions[currentCardIndex + 1];
+  const handleReplay = useCallback(() => {
+    if (isSpeaking) stopSpeaking();
+    else speak(readerText);
+  }, [isSpeaking, readerText, speak, stopSpeaking]);
   const panelLayout = isReading ? 'side' : phase === 'greeting' || phase === 'intention' ? 'expanded' : 'bottom';
 
   const dialoguePanel = (
@@ -130,6 +138,10 @@ export function VisualNovelScene({
       revealedCount={revealedCount}
       totalCards={drawnCards.length}
       isLastCard={currentCardIndex + 1 >= drawnCards.length}
+      nextPositionName={nextPosition?.name}
+      notice={notice}
+      voiceEnabled={voiceEnabled}
+      onReplay={handleReplay}
       onSend={onSendMessage}
       onRetry={onRetry}
       onDismissError={onDismissError}
@@ -144,8 +156,8 @@ export function VisualNovelScene({
       <Ambience />
 
       <header className="vn-topbar">
-        <Link href="/" className="vn-exit-btn" aria-label="Exit Sanctuary">
-          ✦ Exit<span className="vn-exit-btn__long"> Sanctuary</span>
+        <Link href="/" className="vn-exit-btn" aria-label="Rời phòng đọc bài">
+          ✦ Rời<span className="vn-exit-btn__long"> phòng</span>
         </Link>
 
         <div className="vn-topbar__right">
@@ -156,7 +168,6 @@ export function VisualNovelScene({
               currentCardIndex={currentCardIndex}
               highestCardIndexReached={state.highestCardIndexReached}
               canNavigate={isReading && !isTyping}
-              meaningsByNumber={meaningsByNumber}
               onGoToCard={onGoToCard}
             />
           )}
@@ -165,9 +176,9 @@ export function VisualNovelScene({
             className="voice-toggle"
             onClick={toggleVoice}
             aria-pressed={voiceEnabled}
-            aria-label={voiceEnabled ? 'Turn voice off' : 'Turn voice on'}
+            aria-label={voiceEnabled ? 'Tắt giọng đọc' : 'Bật giọng đọc'}
           >
-            {voiceEnabled ? '🔊 Voice: on' : '🔇 Voice: off'}
+            {voiceEnabled ? '🔊 Giọng đọc: bật' : '🔇 Giọng đọc: tắt'}
           </button>
         </div>
       </header>
@@ -191,7 +202,6 @@ export function VisualNovelScene({
             {SPREAD_VISIBLE_PHASES.includes(phase) && (
               <SpreadLayout
                 drawnCards={drawnCards}
-                meaningsByNumber={meaningsByNumber}
                 spreadId={state.selectedSpread || 'three'}
                 currentCardIndex={currentCardIndex}
                 onRevealCard={onRevealCard}
@@ -207,13 +217,12 @@ export function VisualNovelScene({
               <TarotCard
                 index={currentCardIndex}
                 cardNumber={activeCard.cardNumber}
-                cardName={meaningsByNumber.get(activeCard.cardNumber)?.cardName || ''}
                 isReversed={activeCard.isReversed}
                 isRevealed={activeCard.isRevealed}
                 isActive={isSpeaking}
                 onReveal={onRevealCard}
                 positionName={activePosition?.name}
-                positionDescription={activePosition?.description}
+                positionBadge={drawnCards.length > 1 ? `${currentCardIndex + 1}/${drawnCards.length}` : ''}
                 size="large"
               />
             </div>

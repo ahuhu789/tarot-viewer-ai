@@ -55,6 +55,9 @@ export const drawRequestSchema = z.object({
 
 export const ttsRequestSchema = z.object({
   text: z.string().trim().min(1).max(LIMITS.ttsChars),
+  /** Text spoken just before this chunk, for smoother intonation across chunks. */
+  previousText: z.string().max(LIMITS.ttsChars).optional(),
+  language: z.enum(['vi', 'en']).optional(),
 });
 
 export type ReadingRequest = z.infer<typeof readingRequestSchema>;

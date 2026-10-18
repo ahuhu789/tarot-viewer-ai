@@ -1028,7 +1028,10 @@ a {
 
 .vn-buttons-row {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 0.5rem;
   width: 100%;
 }
 
@@ -1091,6 +1094,142 @@ a {
 .vn-error__retry {
   background: rgba(243, 195, 195, 0.12);
   font-weight: 600;
+}
+
+/* ==========================================================================
+   Reading flow v2: position badges, ordered reveal, card captions, notices
+   ========================================================================== */
+.tarot-card__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--gold-primary);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+
+.tarot-card__caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.tarot-card__name {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.tarot-card__name-en {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+.tarot-card__orient {
+  margin-top: 0.15rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(230, 194, 98, 0.35);
+  color: var(--gold-primary);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tarot-card__orient.is-reversed {
+  border-color: rgba(214, 120, 120, 0.6);
+  color: #e6a0a0;
+}
+
+
+.tarot-card__scene.is-locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+
+.tarot-card__scene.is-next::after {
+  animation: glowPulse 1.6s ease-in-out infinite alternate;
+}
+
+.pick-card {
+  position: relative;
+}
+
+.pick-card__order {
+  position: absolute;
+  inset: auto 0 2px 0;
+  margin: 0 auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--gold-primary);
+  color: #1a1408;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.vn-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: none;
+}
+
+.vn-replay-btn,
+.vn-secondary-btn {
+  border: 1px solid var(--border-gold);
+  background: transparent;
+  color: var(--gold-primary);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.vn-secondary-btn {
+  padding: 0.55rem 1rem;
+  font-size: 0.78rem;
+}
+
+.vn-replay-btn:hover,
+.vn-secondary-btn:hover {
+  background: rgba(230, 194, 98, 0.1);
+}
+
+.vn-notice {
+  flex: none;
+  margin-top: 0.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--gold-primary);
+  opacity: 0.9;
+}
+
+.vn-text-box h3 {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  color: var(--gold-primary);
+  margin: 0 0 0.6rem;
+}
+
+.vn-text-box em {
+  color: var(--text-muted);
 }
 
 /* ==========================================================================

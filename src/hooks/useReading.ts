@@ -27,19 +27,35 @@ Những lá bài Tarot ở đây không định đoạt số phận của bạn.
 
 Hãy hít một hơi thật sâu và chia sẻ điều bạn đang trăn trở: công việc, tình cảm, một lựa chọn sắp tới, hay đơn giản là thông điệp bạn cần cho hôm nay. *(You can also write in English.)*`;
 
-const DEFAULT_ERROR = 'The connection to the reader was interrupted. Please try again.';
+const DEFAULT_ERROR = 'Kết nối với người đọc bài bị gián đoạn. Bạn thử lại nhé.';
+const DRAW_ERROR = 'Không rút được bài. Bạn thử lại nhé.';
 
 export interface ReadingError {
   message: string;
   canRetry: boolean;
 }
 
-type AssistantListener = ((text: string) => void) | null;
+/** Receives the AI reply while it streams (used to start text-to-speech early). */
+export interface AssistantListener {
+  begin: () => void;
+  update: (textSoFar: string) => void;
+  end: (fullText: string) => void;
+}
 
 /** What to repeat when the user presses Retry. */
 type RetryAction =
   | { kind: 'reading'; messages: ChatMessage[]; override?: Partial<TarotReadingState> }
   | { kind: 'draw' };
+
+function greetingMessage(): ChatMessage {
+  return {
+    id: newId('ai-greeting'),
+    role: 'assistant',
+    content: OPENING_GREETING,
+    timestamp: new Date().toISOString(),
+    metadata: { phase: 'greeting', activeCardIndex: 0 },
+  };
+}
 
 let idCounter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now()}-${++idCounter}`;
@@ -52,7 +68,7 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
   } catch {
     /* not JSON */
   }
-  if (res.status === 429) return 'Too many requests. Please wait a moment and try again.';
+  if (res.status === 429) return 'Bạn thao tác hơi nhanh. Chờ một chút rồi thử lại nhé.';
   return fallback;
 }
 
@@ -62,13 +78,15 @@ export function useReading() {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<ReadingError | null>(null);
   const [streamStore] = useState<TextStream>(() => createTextStream());
+  /** Short-lived status line, e.g. while the server waits out an AI rate limit. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Refs mirror the latest state so the (stable) callbacks below never read stale values.
   const stateRef = useRef<TarotReadingState>(INITIAL_STATE);
   const messagesRef = useRef<ChatMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const retryRef = useRef<RetryAction | null>(null);
-  const assistantListenerRef = useRef<AssistantListener>(null);
+  const assistantListenerRef = useRef<AssistantListener | null>(null);
 
   const updateState = useCallback((update: (prev: TarotReadingState) => TarotReadingState) => {
     stateRef.current = update(stateRef.current);
@@ -81,7 +99,7 @@ export function useReading() {
   }, []);
 
   /** Lets the scene register a listener (e.g. text-to-speech) for completed AI replies. */
-  const setOnAssistantMessage = useCallback((listener: AssistantListener) => {
+  const setOnAssistantMessage = useCallback((listener: AssistantListener | null) => {
     assistantListenerRef.current = listener;
   }, []);
 
@@ -96,7 +114,9 @@ export function useReading() {
       const requestState = { ...stateRef.current, ...overrideState };
       setIsTyping(true);
       setError(null);
+      setNotice(null);
       streamStore.reset();
+      let listenerStarted = false;
 
       let accumulatedText = '';
       let streamError: string | null = null;
@@ -143,6 +163,22 @@ export function useReading() {
                 const token = decodeURIComponent(dataStr);
                 accumulatedText += token;
                 streamStore.append(token); // batched per animation frame
+                if (!listenerStarted) {
+                  listenerStarted = true;
+                  setNotice(null);
+                  assistantListenerRef.current?.begin();
+                }
+                assistantListenerRef.current?.update(accumulatedText);
+              } else if (currentEvent === 'replace') {
+                // The server repaired a card name: show the corrected text.
+                accumulatedText = decodeURIComponent(dataStr);
+                streamStore.reset();
+                streamStore.append(accumulatedText);
+              } else if (currentEvent === 'status') {
+                const status = JSON.parse(dataStr) as { kind?: string; seconds?: number };
+                if (status.kind === 'rate_limit_wait') {
+                  setNotice(`Người đọc bài đang lấy lại hơi thở… (khoảng ${status.seconds ?? 10} giây)`);
+                }
               } else if (currentEvent === 'state') {
                 receivedState = true;
                 const stateUpdate = JSON.parse(dataStr) as Partial<TarotReadingState>;
@@ -167,7 +203,6 @@ export function useReading() {
             },
           };
           updateMessages((prev) => [...prev, newMsg]);
-          assistantListenerRef.current?.(accumulatedText);
         }
 
         if (streamError) {
@@ -183,9 +218,12 @@ export function useReading() {
           canRetry: true,
         });
       } finally {
+        // Always close the spoken reply (also after an error mid-stream).
+        if (listenerStarted && !controller.signal.aborted) assistantListenerRef.current?.end(accumulatedText);
         if (abortRef.current === controller) {
           abortRef.current = null;
           setIsTyping(false);
+          setNotice(null);
           streamStore.reset();
         }
       }
@@ -198,15 +236,7 @@ export function useReading() {
     // Show the fixed greeting locally (no API call) and move straight to the
     // intention phase. Guarded so Strict Mode's double effect adds it only once.
     if (messagesRef.current.length === 0) {
-      updateMessages(() => [
-        {
-          id: newId('ai-greeting'),
-          role: 'assistant',
-          content: OPENING_GREETING,
-          timestamp: new Date().toISOString(),
-          metadata: { phase: 'greeting', activeCardIndex: 0 },
-        },
-      ]);
+      updateMessages(() => [greetingMessage()]);
       updateState((prev) => ({ ...prev, phase: 'intention' }));
     }
     return () => {
@@ -239,7 +269,10 @@ export function useReading() {
         {
           id: newId('user-select'),
           role: 'user',
-          content: `I select the ${spreadId === 'single' ? 'Daily Draw' : 'Past, Present & Future'} spread.`,
+          content:
+            spreadId === 'single'
+              ? 'Mình chọn trải bài 1 lá – Thông điệp.'
+              : 'Mình chọn trải bài 3 lá – Quá khứ, Hiện tại, Tương lai.',
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -261,15 +294,15 @@ export function useReading() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ spreadId }),
       });
-      if (!res.ok) throw new Error(await readErrorMessage(res, 'Could not draw the cards.'));
+      if (!res.ok) throw new Error(await readErrorMessage(res, DRAW_ERROR));
       const data = await res.json();
-      if (!Array.isArray(data.drawnCards)) throw new Error('Could not draw the cards.');
+      if (!Array.isArray(data.drawnCards)) throw new Error(DRAW_ERROR);
       updateState((prev) => ({ ...prev, drawnCards: data.drawnCards, phase: 'drawing' }));
     } catch (e) {
       console.error('❌ Error drawing cards:', e);
       retryRef.current = { kind: 'draw' };
       setError({
-        message: e instanceof Error && e.message ? e.message : 'Could not draw the cards.',
+        message: e instanceof Error && e.message ? e.message : DRAW_ERROR,
         canRetry: true,
       });
     }
@@ -297,6 +330,11 @@ export function useReading() {
     const nextIndex = s.currentCardIndex + 1;
 
     if (nextIndex >= s.drawnCards.length) {
+      if (s.drawnCards.length === 1) {
+        // A single card already ends with advice: no separate synthesis call is needed.
+        updateState((prev) => ({ ...prev, phase: 'follow_up', readingComplete: true }));
+        return;
+      }
       updateState((prev) => ({ ...prev, phase: 'synthesis' }));
       await runReadingStep(messagesRef.current, { phase: 'synthesis' });
       return;
@@ -332,13 +370,15 @@ export function useReading() {
   const restartReading = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    stateRef.current = INITIAL_STATE;
-    messagesRef.current = [];
-    setStateRaw(INITIAL_STATE);
-    setMessagesRaw([]);
+    retryRef.current = null;
+    stateRef.current = { ...INITIAL_STATE, phase: 'intention' };
+    messagesRef.current = [greetingMessage()];
+    setStateRaw(stateRef.current);
+    setMessagesRaw(messagesRef.current);
     setError(null);
-    void runReadingStep([]);
-  }, [runReadingStep]);
+    setNotice(null);
+    streamStore.reset();
+  }, [streamStore]);
 
   const retry = useCallback(() => {
     const action = retryRef.current;
@@ -355,6 +395,7 @@ export function useReading() {
     isTyping,
     streamStore,
     error,
+    notice,
     retry,
     dismissError,
     sendMessage,

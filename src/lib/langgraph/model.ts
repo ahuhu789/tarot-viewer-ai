@@ -11,13 +11,17 @@ export function isAIConfigured(): boolean {
   return Boolean(process.env.ALIBABA_API_KEY?.trim());
 }
 
-let cached: ChatOpenAI | null = null;
+const cache = new Map<number, ChatOpenAI>();
+
+/** Default output budget. Each node passes its own, smaller cap (Groq free tier: ~1k output tokens/min). */
+export const DEFAULT_MAX_TOKENS = 500;
 
 /**
- * Lazily creates the Qwen client. There is deliberately no dummy-key fallback:
- * a missing key fails fast with a clear message instead of an opaque 401 later.
+ * Lazily creates the chat client (one per output budget). There is deliberately
+ * no dummy-key fallback: a missing key fails fast with a clear message.
  */
-export function getModel(): ChatOpenAI {
+export function getModel(maxTokens: number = DEFAULT_MAX_TOKENS): ChatOpenAI {
+  const cached = cache.get(maxTokens);
   if (cached) return cached;
   const apiKey = process.env.ALIBABA_API_KEY?.trim();
   if (!apiKey) {
@@ -25,9 +29,11 @@ export function getModel(): ChatOpenAI {
       'ALIBABA_API_KEY is not set. Copy .env.example to .env.local and add your DashScope key.',
     );
   }
-  cached = new ChatOpenAI({
+  const model = new ChatOpenAI({
     model: process.env.ALIBABA_MODEL || 'qwen-plus',
-    maxTokens: 1200,
+    maxTokens,
+    // Rate-limit errors are handled (and explained to the user) by the API route.
+    maxRetries: 0,
     temperature: 0.7,
     streaming: true,
     apiKey,
@@ -40,7 +46,8 @@ export function getModel(): ChatOpenAI {
       baseURL: process.env.ALIBABA_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     },
   });
-  return cached;
+  cache.set(maxTokens, model);
+  return model;
 }
 
 /** Tag used for helper LLM calls whose tokens must never reach the user. */
