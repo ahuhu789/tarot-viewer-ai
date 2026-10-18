@@ -1,5 +1,3 @@
-export const DECK_ID = '1909';
-
 export interface TarotCard {
   cardNumber: number;          // 0–77
   cardName: string;            // "The Fool"

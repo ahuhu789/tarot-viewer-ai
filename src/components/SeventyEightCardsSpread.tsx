@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import { CARD_BACK_URL } from '@/lib/cards';
 import { SpreadId } from '@/types/tarot';
 import { SPREADS } from '@/data/spreads';
 
@@ -52,7 +53,7 @@ export const SeventyEightCardsSpread: React.FC<SeventyEightCardsSpreadProps> = (
               }}
             >
               <Image
-                src="/cards/back.jpg"
+                src={CARD_BACK_URL}
                 alt="Tarot Card Back"
                 fill
                 style={styles.cardImage}

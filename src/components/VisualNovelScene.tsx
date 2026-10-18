@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { CARD_BACK_URL, cardImageUrl } from '@/lib/cards';
 import { ChatMessage, TarotReadingState, TarotCard as TarotCardType } from '@/types/tarot';
 import { useTTS } from '@/hooks/useTTS';
 import { SpreadPicker } from './SpreadPicker';
@@ -191,7 +192,7 @@ export const VisualNovelScene: React.FC<VisualNovelSceneProps> = ({
               >
                 {c.isRevealed ? (
                   <Image
-                    src={`/cards/1909/${c.cardNumber}.jpg`}
+                    src={cardImageUrl(c.cardNumber)}
                     alt="Card Front"
                     fill
                     className="mini-card-image"
@@ -199,7 +200,7 @@ export const VisualNovelScene: React.FC<VisualNovelSceneProps> = ({
                   />
                 ) : (
                   <Image
-                    src="/cards/back.jpg"
+                    src={CARD_BACK_URL}
                     alt="Card Back"
                     fill
                     className="mini-card-image"

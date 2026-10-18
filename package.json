@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "images": "node scripts/optimize-images.mjs"
   },
   "dependencies": {
     "@langchain/core": "^1.2.1",
@@ -15,7 +16,9 @@
     "@langchain/openai": "^1.5.3",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.2",
@@ -26,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "postcss": "^8.5.16",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.3.2",
     "typescript": "^5"
   }

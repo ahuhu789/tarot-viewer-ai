@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
+import { CARD_BACK_URL, cardImageUrl } from '@/lib/cards';
 
 interface TarotCardProps {
   cardNumber: number;
@@ -28,9 +29,8 @@ export const TarotCard: React.FC<TarotCardProps> = ({
   size = 'medium',
   hideLabels = false,
 }) => {
-  // Hardcode deck to '1909' edition
-  const frontImageUrl = `/cards/1909/${cardNumber}.jpg`;
-  const backImageUrl = `/cards/back.jpg`;
+  const frontImageUrl = cardImageUrl(cardNumber);
+  const backImageUrl = CARD_BACK_URL;
 
   const handleFlip = () => {
     if (!isRevealed) {

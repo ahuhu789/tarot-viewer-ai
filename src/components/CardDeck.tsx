@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import { CARD_BACK_URL } from '@/lib/cards';
 
 interface CardDeckProps {
   onDraw: () => void;
@@ -55,7 +56,7 @@ export const CardDeck: React.FC<CardDeckProps> = ({ onDraw }) => {
                 }}
               >
                 <Image
-                  src="/cards/back.jpg"
+                  src={CARD_BACK_URL}
                   alt="Card Back"
                   fill
                   style={styles.cardBackImage}

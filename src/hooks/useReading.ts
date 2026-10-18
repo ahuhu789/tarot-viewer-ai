@@ -180,9 +180,6 @@ export function useReading() {
       const data = await res.json();
 
       if (data.drawnCards) {
-        // Preload drawn cards in background
-        preloadImages(data.drawnCards);
-
         setState((prev) => ({
           ...prev,
           drawnCards: data.drawnCards,
@@ -192,13 +189,6 @@ export function useReading() {
     } catch (e) {
       console.error('❌ Error drawing cards:', e);
     }
-  };
-
-  const preloadImages = (cards: DrawnCard[]) => {
-    cards.forEach((c) => {
-      const img = new Image();
-      img.src = `/cards/1909/${c.cardNumber}.jpg`;
-    });
   };
 
   const finishDrawing = async () => {
