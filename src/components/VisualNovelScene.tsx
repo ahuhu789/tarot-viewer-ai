@@ -2,6 +2,7 @@
 
 import React, { memo, useCallback, useEffect, useMemo } from 'react';
 import { isVietnamese } from '@/lib/reading-script';
+import { cardMeaningVi } from '@/data/card-meanings-vi';
 import Link from 'next/link';
 import { ChatMessage, ReadingPhase, SpreadId, TarotReadingState } from '@/types/tarot';
 import type { TextStream } from '@/lib/text-stream';
@@ -23,12 +24,13 @@ interface VisualNovelSceneProps {
   streamStore: TextStream;
   error: ReadingError | null;
   notice: string | null;
+  restored?: boolean;
   onRetry: () => void;
   onDismissError: () => void;
   onSendMessage: (text: string) => void;
   onSelectSpread: (spreadId: SpreadId) => void;
   onFinishShuffling: () => void;
-  onSubmitCardSelection: () => void;
+  onSubmitCardSelection: (picks: number[]) => void | Promise<void>;
   onFinishDrawing: () => void;
   onRevealCard: (index: number) => void;
   onAdvanceToNextCard: () => void;
@@ -85,6 +87,7 @@ export function VisualNovelScene({
   streamStore,
   error,
   notice,
+  restored = false,
   onRetry,
   onDismissError,
   onSendMessage,
@@ -120,6 +123,15 @@ export function VisualNovelScene({
   const activeCard = drawnCards[currentCardIndex];
   const activePosition = activeCard ? activeSpread?.positions[activeCard.positionIndex] : undefined;
   const nextPosition = activeSpread?.positions[currentCardIndex + 1];
+  const hasStarted = messages.some((m) => m.role === 'user');
+  const handleRestart = useCallback(() => {
+    // Only ask when a reading is in progress; after it is complete just start over.
+    if (!state.readingComplete && state.drawnCards.length > 0 && !window.confirm('Bỏ trải bài đang đọc và bắt đầu lại?')) return;
+    stopSpeaking();
+    onRestart();
+  }, [onRestart, state.readingComplete, state.drawnCards.length, stopSpeaking]);
+  const activeMeaningVi = activeCard && ttsLanguage === 'vi' ? cardMeaningVi(activeCard.cardNumber) : undefined;
+  const activeKeywords = activeMeaningVi ? (activeCard?.isReversed ? activeMeaningVi.reversed : activeMeaningVi.upright) : '';
   const handleReplay = useCallback(() => {
     if (isSpeaking) stopSpeaking();
     else speak(readerText);
@@ -156,9 +168,17 @@ export function VisualNovelScene({
       <Ambience />
 
       <header className="vn-topbar">
-        <Link href="/" className="vn-exit-btn" aria-label="Rời phòng đọc bài">
-          ✦ Rời<span className="vn-exit-btn__long"> phòng</span>
-        </Link>
+        <div className="vn-topbar__left">
+          <Link href="/" className="vn-exit-btn" aria-label="Rời phòng đọc bài">
+            ✦ Rời<span className="vn-exit-btn__long"> phòng</span>
+          </Link>
+          {hasStarted && (
+            <button type="button" className="vn-restart-btn" onClick={handleRestart} title="Bắt đầu một trải bài mới">
+              ↺ Trải bài mới
+            </button>
+          )}
+          {restored && <span className="vn-restored-pill">Đã khôi phục phiên trước</span>}
+        </div>
 
         <div className="vn-topbar__right">
           {activeSpread && drawnCards.length > 0 && (
@@ -223,6 +243,7 @@ export function VisualNovelScene({
                 onReveal={onRevealCard}
                 positionName={activePosition?.name}
                 positionBadge={drawnCards.length > 1 ? `${currentCardIndex + 1}/${drawnCards.length}` : ''}
+                keywords={activeKeywords}
                 size="large"
               />
             </div>

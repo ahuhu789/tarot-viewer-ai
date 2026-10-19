@@ -1232,6 +1232,59 @@ a {
   color: var(--text-muted);
 }
 
+.tarot-card__keywords {
+  margin-top: 0.3rem;
+  max-width: 24ch;
+  font-style: italic;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.vn-topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.vn-restart-btn {
+  border: 1px solid var(--border-gold);
+  background: transparent;
+  color: var(--gold-primary);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vn-restart-btn:hover {
+  background: rgba(230, 194, 98, 0.1);
+}
+
+.vn-restored-pill {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+@media (min-width: 760px) {
+  .spread-picker__list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .vn-restored-pill {
+    display: none;
+  }
+}
+
 /* ==========================================================================
    Responsive: stack the reading layout under 900px
    ========================================================================== */

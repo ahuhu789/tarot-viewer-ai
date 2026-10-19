@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatMessage, TarotReadingState, SpreadId } from '@/types/tarot';
 import { createTextStream, TextStream } from '@/lib/text-stream';
+import { SPREADS } from '@/data/spreads';
+import { clearSession, IN_FLIGHT_PHASES, loadSession, saveSession, type SavedSession } from '@/lib/session-store';
 
 const INITIAL_STATE: TarotReadingState = {
   phase: 'greeting',
@@ -45,7 +47,7 @@ export interface AssistantListener {
 /** What to repeat when the user presses Retry. */
 type RetryAction =
   | { kind: 'reading'; messages: ChatMessage[]; override?: Partial<TarotReadingState> }
-  | { kind: 'draw' };
+  | { kind: 'draw'; picks?: number[] };
 
 function greetingMessage(): ChatMessage {
   return {
@@ -80,6 +82,8 @@ export function useReading() {
   const [streamStore] = useState<TextStream>(() => createTextStream());
   /** Short-lived status line, e.g. while the server waits out an AI rate limit. */
   const [notice, setNotice] = useState<string | null>(null);
+  /** True when the reading was resumed from localStorage. */
+  const [restored, setRestored] = useState(false);
 
   // Refs mirror the latest state so the (stable) callbacks below never read stale values.
   const stateRef = useRef<TarotReadingState>(INITIAL_STATE);
@@ -91,11 +95,13 @@ export function useReading() {
   const updateState = useCallback((update: (prev: TarotReadingState) => TarotReadingState) => {
     stateRef.current = update(stateRef.current);
     setStateRaw(stateRef.current);
+    saveSession(stateRef.current, messagesRef.current);
   }, []);
 
   const updateMessages = useCallback((update: (prev: ChatMessage[]) => ChatMessage[]) => {
     messagesRef.current = update(messagesRef.current);
     setMessagesRaw(messagesRef.current);
+    saveSession(stateRef.current, messagesRef.current);
   }, []);
 
   /** Lets the scene register a listener (e.g. text-to-speech) for completed AI replies. */
@@ -231,19 +237,46 @@ export function useReading() {
     [streamStore, updateMessages, updateState],
   );
 
+  /** Resume a reading saved in localStorage (e.g. after a reload). */
+  const restoreSession = useCallback(
+    (saved: SavedSession) => {
+      updateMessages(() => saved.messages);
+      updateState(() => ({ ...INITIAL_STATE, ...saved.state }));
+      setRestored(true);
+      if (IN_FLIGHT_PHASES.includes(saved.state.phase)) {
+        // The page was closed while the reader was answering: offer to repeat that step.
+        retryRef.current = {
+          kind: 'reading',
+          messages: saved.messages,
+          override: { phase: saved.state.phase, currentCardIndex: saved.state.currentCardIndex },
+        };
+        setError({ message: 'Phiên trước bị gián đoạn khi đang giải bài. Bấm Thử lại để tiếp tục.', canRetry: true });
+      }
+    },
+    [updateMessages, updateState],
+  );
+
   // Start the session once with the fixed greeting (no network request).
   useEffect(() => {
     // Show the fixed greeting locally (no API call) and move straight to the
     // intention phase. Guarded so Strict Mode's double effect adds it only once.
     if (messagesRef.current.length === 0) {
-      updateMessages(() => [greetingMessage()]);
-      updateState((prev) => ({ ...prev, phase: 'intention' }));
+      const saved = loadSession();
+      if (saved) {
+        // Resume the previous reading (e.g. after a reload). Deferred one microtask
+        // so the state updates do not run synchronously inside the effect.
+        messagesRef.current = saved.messages;
+        queueMicrotask(() => restoreSession(saved));
+      } else {
+        updateMessages(() => [greetingMessage()]);
+        updateState((prev) => ({ ...prev, phase: 'intention' }));
+      }
     }
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [updateMessages, updateState]);
+  }, [restoreSession, updateMessages, updateState]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -269,10 +302,7 @@ export function useReading() {
         {
           id: newId('user-select'),
           role: 'user',
-          content:
-            spreadId === 'single'
-              ? 'Mình chọn trải bài 1 lá – Thông điệp.'
-              : 'Mình chọn trải bài 3 lá – Quá khứ, Hiện tại, Tương lai.',
+          content: `Mình chọn kiểu trải bài: ${SPREADS[spreadId]?.name ?? spreadId}.`,
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -284,7 +314,7 @@ export function useReading() {
     updateState((prev) => ({ ...prev, phase: 'manual_selection' }));
   }, [updateState]);
 
-  const submitCardSelection = useCallback(async () => {
+  const submitCardSelection = useCallback(async (picks?: number[]) => {
     const spreadId = stateRef.current.selectedSpread;
     if (!spreadId) return;
     setError(null);
@@ -292,7 +322,7 @@ export function useReading() {
       const res = await fetch('/api/reading/draw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spreadId }),
+        body: JSON.stringify({ spreadId, picks }),
       });
       if (!res.ok) throw new Error(await readErrorMessage(res, DRAW_ERROR));
       const data = await res.json();
@@ -300,7 +330,7 @@ export function useReading() {
       updateState((prev) => ({ ...prev, drawnCards: data.drawnCards, phase: 'drawing' }));
     } catch (e) {
       console.error('❌ Error drawing cards:', e);
-      retryRef.current = { kind: 'draw' };
+      retryRef.current = { kind: 'draw', picks };
       setError({
         message: e instanceof Error && e.message ? e.message : DRAW_ERROR,
         canRetry: true,
@@ -377,13 +407,15 @@ export function useReading() {
     setMessagesRaw(messagesRef.current);
     setError(null);
     setNotice(null);
+    setRestored(false);
     streamStore.reset();
+    clearSession();
   }, [streamStore]);
 
   const retry = useCallback(() => {
     const action = retryRef.current;
     if (!action) return;
-    if (action.kind === 'draw') void submitCardSelection();
+    if (action.kind === 'draw') void submitCardSelection(action.picks);
     else void runReadingStep(action.messages, action.override);
   }, [runReadingStep, submitCardSelection]);
 
@@ -396,6 +428,7 @@ export function useReading() {
     streamStore,
     error,
     notice,
+    restored,
     retry,
     dismissError,
     sendMessage,

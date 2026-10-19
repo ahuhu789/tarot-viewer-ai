@@ -13,7 +13,7 @@ export interface TarotCard {
   guideUrl: string;
 }
 
-export type SpreadId = 'single' | 'three';
+export type SpreadId = 'single' | 'three' | 'love' | 'choice';
 
 export interface SpreadPosition {
   index: number; // 0-based index in the drawn cards array (= reading order)

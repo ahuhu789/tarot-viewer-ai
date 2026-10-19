@@ -8,6 +8,8 @@ import { SPREADS } from '@/data/spreads';
 import { cardDisplayName } from '@/data/card-names';
 import { isVietnamese, orderedCards, orientationLabel, positionLabel, spreadOf } from '@/lib/reading-script';
 import { detectLanguage } from '@/lib/language';
+import { cardMeaningVi } from '@/data/card-meanings-vi';
+import { isYesNoQuestion, questionTopic } from '@/lib/question-topic';
 import type { DrawnCard } from '@/types/tarot';
 import {
   getIntentionPrompt,
@@ -20,8 +22,19 @@ import {
 
 type GraphState = typeof TarotReadingAnnotation.State;
 
-/** Output-token caps per step (Vietnamese is token-heavy; Groq free tier ≈ 1k output tokens/min). */
-const BUDGET = { intention: 220, interpret: 420, chat: 320, synthesis: 480, followUp: 340, closing: 180 } as const;
+/**
+ * Output-token caps per step. The prompts ask for 50–110 words; Vietnamese needs
+ * roughly 1.2–1.5 tokens per word, so these leave headroom without allowing rambling.
+ */
+export const BUDGET = {
+  intention: 120,
+  interpret: 190,
+  interpretSingle: 230,
+  chat: 160,
+  synthesis: 240,
+  followUp: 180,
+  closing: 100,
+} as const;
 
 /** Only the last few conversational turns are sent for chat-like steps. */
 const CHAT_WINDOW = 6;
@@ -34,27 +47,38 @@ function questionBlock(state: GraphState): string {
     : "SEEKER'S QUESTION: (general guidance)";
 }
 
-/** One card, described with canonical names and only the meaning for its orientation. */
+/** Meaning of a card for its orientation, in the session language. */
+function meaningFor(card: DrawnCard, vi: boolean): string {
+  if (vi) {
+    const m = cardMeaningVi(card.cardNumber);
+    if (m) return card.isReversed ? m.reversed : m.upright;
+  }
+  const csv = getCardByNumber(card.cardNumber);
+  return csv ? (card.isReversed ? csv.reversedMeaning : csv.uprightMeaning) : '';
+}
+
+/**
+ * One card with canonical names and only the data relevant to the question:
+ * the meaning for its orientation, plus the love OR career angle when the
+ * question is about that, plus yes/no only for yes/no questions.
+ */
 function cardBrief(card: DrawnCard, state: GraphState, withDetails: boolean): string {
   const spread = spreadOf(state);
   const vi = isVietnamese(state.detectedLanguage);
   const pos = spread.positions[card.positionIndex];
-  const csv = getCardByNumber(card.cardNumber);
   const lines = [
     `Position ${card.positionIndex + 1}/${spread.positions.length}: "${positionLabel(pos, vi)}" — ${vi ? pos?.description : pos?.descriptionEn}`,
     `Card: ${cardDisplayName(card.cardNumber, vi)}`,
     `Orientation: ${orientationLabel(card.isReversed, vi)} (${card.isReversed ? 'REVERSED' : 'UPRIGHT'})`,
+    `Meaning (${card.isReversed ? 'reversed' : 'upright'}): ${meaningFor(card, vi)}`,
   ];
-  if (csv) {
-    lines.push(`Meaning (${card.isReversed ? 'reversed' : 'upright'}): ${card.isReversed ? csv.reversedMeaning : csv.uprightMeaning}`);
-    if (withDetails) {
-      lines.push(
-        `Arcana: ${csv.arcana}${csv.suit ? `, suit ${csv.suit}` : ''}, element ${csv.element}, ${csv.zodiacSign}`,
-        `Love: ${csv.loveMeaning}`,
-        `Career: ${csv.careerMeaning}`,
-        `Yes/No: ${csv.yesOrNo}`,
-      );
-    }
+  if (withDetails) {
+    const topic = questionTopic(state.userIntention || '');
+    const vim = vi ? cardMeaningVi(card.cardNumber) : undefined;
+    const csv = getCardByNumber(card.cardNumber);
+    if (topic === 'love') lines.push(`Love angle: ${vim?.love ?? csv?.loveMeaning ?? ''}`);
+    if (topic === 'career') lines.push(`Work/money angle: ${vim?.career ?? csv?.careerMeaning ?? ''}`);
+    if (isYesNoQuestion(state.userIntention || '') && csv) lines.push(`Yes/No tendency: ${csv.yesOrNo}`);
   }
   return lines.join('\n');
 }
@@ -63,11 +87,10 @@ function spreadList(state: GraphState): string {
   const vi = isVietnamese(state.detectedLanguage);
   const spread = spreadOf(state);
   return orderedCards(state.drawnCards)
-    .map((c) => {
-      const csv = getCardByNumber(c.cardNumber);
-      const meaning = csv ? (c.isReversed ? csv.reversedMeaning : csv.uprightMeaning) : '';
-      return `${c.positionIndex + 1}. ${positionLabel(spread.positions[c.positionIndex], vi)}: ${cardDisplayName(c.cardNumber, vi)} — ${orientationLabel(c.isReversed, vi)} — ${meaning}`;
-    })
+    .map(
+      (c) =>
+        `${c.positionIndex + 1}. ${positionLabel(spread.positions[c.positionIndex], vi)}: ${cardDisplayName(c.cardNumber, vi)} — ${orientationLabel(c.isReversed, vi)} — ${meaningFor(c, vi)}`,
+    )
     .join('\n');
 }
 
@@ -131,8 +154,9 @@ async function interpretNode(state: GraphState) {
     .filter(Boolean)
     .join('\n\n');
 
-  const response = await getModel(BUDGET.interpret).invoke([
-    new SystemMessage(getInterpretationPrompt(state.detectedLanguage, spread.positions.length === 1)),
+  const single = spread.positions.length === 1;
+  const response = await getModel(single ? BUDGET.interpretSingle : BUDGET.interpret).invoke([
+    new SystemMessage(getInterpretationPrompt(state.detectedLanguage, single)),
     new HumanMessage(request),
   ]);
 

@@ -17,6 +17,7 @@ export default function ReadingRoomPage() {
       streamStore={reading.streamStore}
       error={reading.error}
       notice={reading.notice}
+      restored={reading.restored}
       onRetry={reading.retry}
       onDismissError={reading.dismissError}
       onSendMessage={reading.sendMessage}

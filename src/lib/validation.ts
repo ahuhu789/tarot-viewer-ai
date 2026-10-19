@@ -17,7 +17,7 @@ const phaseSchema = z.enum([
   'closing',
 ]);
 
-const spreadSchema = z.enum(['single', 'three']);
+const spreadSchema = z.enum(['single', 'three', 'love', 'choice']);
 
 const drawnCardSchema = z.object({
   cardNumber: z.number().int().min(0).max(77),
@@ -49,8 +49,17 @@ export const readingRequestSchema = z.object({
   }),
 });
 
+/**
+ * The seeker's picks: indices (0–77) of face-down cards in the spread-out deck,
+ * in position order. Optional for backwards compatibility (random picks).
+ */
 export const drawRequestSchema = z.object({
   spreadId: spreadSchema,
+  picks: z
+    .array(z.number().int().min(0).max(77))
+    .max(10)
+    .refine((p) => new Set(p).size === p.length, 'picks must be distinct')
+    .optional(),
 });
 
 export const ttsRequestSchema = z.object({

@@ -16,7 +16,7 @@ const box: React.CSSProperties = {
   backgroundColor: 'var(--gold-primary)',
 };
 
-const ORDER: SpreadId[] = ['single', 'three'];
+const ORDER: SpreadId[] = ['single', 'three', 'love', 'choice'];
 
 export function SpreadPicker({ onSelect }: SpreadPickerProps) {
   return (

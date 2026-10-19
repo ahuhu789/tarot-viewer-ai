@@ -162,9 +162,17 @@ npm run images -- 1910    # bộ khác
 
 ### 7. Kiểm tra chất lượng mã
 ```bash
-npm run lint
-npx tsc --noEmit
+npm run lint        # ESLint (React Compiler rules)
+npm run typecheck   # tsc --noEmit
+npm test            # Vitest: tên lá bài, rút bài, card-guard, prompt, TTS text, lưu phiên
+npm run check       # cả ba lệnh trên
 ```
+
+Đánh giá một lượt đọc đầy đủ với AI thật (cần server đang chạy và khóa API phía server):
+```bash
+npm run eval -- --base http://localhost:3000 --spread three --question "Mình có nên đổi việc không?" --followup "Tuần này mình nên làm gì?"
+```
+Script kiểm tra tên lá, vị trí, thứ tự trong phần tổng hợp, số từ mỗi lá và việc câu trả lời có bám câu hỏi hay không.
 
 ### 8. Build cho môi trường Production
 ```bash

@@ -100,6 +100,7 @@ export async function POST(req: Request) {
     async start(controller) {
       const send = (event: string, data: string) => controller.enqueue(encoder.encode(sse(event, data)));
       let modelText = '';
+      const startedAt = Date.now();
       try {
         // Server-rendered heading (position, exact card name, orientation): the model never writes it.
         if (prefix) send('token', encodeURIComponent(prefix));
@@ -116,10 +117,16 @@ export async function POST(req: Request) {
                   modelText += chunkContent;
                   send('token', encodeURIComponent(chunkContent));
                 }
-              } else if (event.event === 'on_chat_model_end' && process.env.TAROT_LOG_USAGE) {
-                // Opt-in token accounting (useful to measure cost per step; never logs content).
-                const usage = event.data?.output?.usage_metadata;
-                if (usage) console.info(`📊 ${state.phase}: in=${usage.input_tokens} out=${usage.output_tokens}`);
+              } else if (event.event === 'on_chat_model_end') {
+                // Token accounting per step (metadata only, never content) for cost/latency analysis.
+                const output = event.data?.output;
+                const usage = output?.usage_metadata;
+                const finish = output?.response_metadata?.finish_reason;
+                if (usage) {
+                  console.info(
+                    `📊 ${state.phase}: in=${usage.input_tokens} out=${usage.output_tokens} ms=${Date.now() - startedAt}${finish === 'length' ? ' truncated' : ''}`,
+                  );
+                }
               } else if (event.event === 'on_chain_end' && event.name === 'LangGraph') {
                 finalState = (event.data?.output ?? null) as Record<string, unknown> | null;
               }
@@ -142,7 +149,7 @@ export async function POST(req: Request) {
         if (modelText && allowed.length) {
           const bad = foreignMentions(modelText, allowed);
           if (bad.length) {
-            console.warn('⚠️ AI named cards outside the spread:', bad.map((b) => b.name).join(', '));
+            console.warn(`🛡️ card-guard ${state.phase}: repaired ${bad.length} name(s): ${bad.map((b) => b.name).join(', ')}`);
             if (target !== null) {
               send('replace', encodeURIComponent(prefix + repairCardNames(modelText, target, allowed)));
             }

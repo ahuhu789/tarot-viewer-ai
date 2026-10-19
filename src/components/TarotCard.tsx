@@ -18,6 +18,8 @@ interface TarotCardProps {
   positionName?: string;
   /** "1/3" badge in multi-card spreads. */
   positionBadge?: string;
+  /** Short keyword line (meaning for this orientation), shown under the large card. */
+  keywords?: string;
   /** Face-down and not yet allowed to be turned (cards are revealed in reading order). */
   locked?: boolean;
   /** The next card to reveal: highlighted. */
@@ -45,6 +47,7 @@ function TarotCardBase({
   positionBadge = '',
   locked = false,
   isNext = false,
+  keywords = '',
   size = 'medium',
   hideLabels = false,
 }: TarotCardProps) {
@@ -99,15 +102,14 @@ function TarotCardBase({
             <Image src={CARD_BACK_URL} alt="" fill sizes={IMAGE_SIZES[size]} className="card-image" />
           </div>
           <div className="card-face card-front">
-            {isRevealed && (
-              <Image
-                src={cardImageUrl(cardNumber)}
-                alt={`${nameVi} (${nameEn}), ${orientation.toLowerCase()}`}
-                fill
-                sizes={IMAGE_SIZES[size]}
-                className="card-image"
-              />
-            )}
+            {/* Rendered while face-down too, so the image is already loaded when the card flips. */}
+            <Image
+              src={cardImageUrl(cardNumber)}
+              alt={isRevealed ? `${nameVi} (${nameEn}), ${orientation.toLowerCase()}` : ''}
+              fill
+              sizes={IMAGE_SIZES[size]}
+              className="card-image"
+            />
           </div>
         </div>
       </div>
@@ -119,6 +121,7 @@ function TarotCardBase({
               <span className="tarot-card__name">{nameVi}</span>
               <span className="tarot-card__name-en">{nameEn}</span>
               <span className={`tarot-card__orient ${isReversed ? 'is-reversed' : ''}`}>{orientation}</span>
+              {keywords && <span className="tarot-card__keywords">{keywords}</span>}
             </>
           ) : locked ? (
             'Chờ lượt'

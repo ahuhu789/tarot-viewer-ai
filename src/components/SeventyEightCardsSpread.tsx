@@ -5,13 +5,14 @@ import { getImageProps } from 'next/image';
 import { SpreadId } from '@/types/tarot';
 import { SPREADS } from '@/data/spreads';
 import { CARD_BACK_URL } from '@/lib/cards';
+import { DECK_SIZE } from '@/lib/draw';
 
 interface SeventyEightCardsSpreadProps {
   spreadId: SpreadId;
-  onSelectComplete: () => void;
+  /** Called with the indices of the picked face-down cards, in position order. */
+  onSelectComplete: (picks: number[]) => void | Promise<void>;
 }
 
-const DECK_SIZE = 78;
 
 export function SeventyEightCardsSpread({ spreadId, onSelectComplete }: SeventyEightCardsSpreadProps) {
   const [selected, setSelected] = useState<number[]>([]);
@@ -39,7 +40,7 @@ export function SeventyEightCardsSpread({ spreadId, onSelectComplete }: SeventyE
     if (!complete || submitting) return;
     setSubmitting(true);
     try {
-      await onSelectComplete();
+      await onSelectComplete(selected);
     } finally {
       setSubmitting(false);
     }
