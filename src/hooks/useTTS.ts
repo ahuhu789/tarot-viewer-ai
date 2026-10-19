@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { SpeechQueue } from '@/lib/speech-queue';
 
 const STORAGE_KEY = 'tarot_voice_enabled';
-const MAX_TTS_CHARS = 2500;
 
 // --- Voice preference as an external store (no setState-in-effect, SSR safe) ---
 const prefListeners = new Set<() => void>();
@@ -34,90 +34,43 @@ function writePref(value: boolean) {
   prefListeners.forEach((l) => l());
 }
 
-/** Strips markdown so the voice does not read out asterisks and hashes. */
-function toSpeakableText(text: string): string {
-  return text
-    .replace(/[*_`#>]+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_TTS_CHARS);
-}
-
-export function useTTS() {
+/**
+ * Voice for the reader. Replies are spoken while they stream: playback starts
+ * after the first sentence (see SpeechQueue) instead of after the whole reply
+ * and its whole audio file have been downloaded.
+ */
+export function useTTS(language: 'vi' | 'en' = 'vi') {
   const voiceEnabled = useSyncExternalStore(subscribePref, readPref, () => false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const urlRef = useRef<string | null>(null);
-  const fetchRef = useRef<AbortController | null>(null);
+  const [queue] = useState(() => new SpeechQueue(setIsSpeaking));
 
-  const stopSpeaking = useCallback(() => {
-    fetchRef.current?.abort();
-    fetchRef.current = null;
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    if (urlRef.current) {
-      URL.revokeObjectURL(urlRef.current);
-      urlRef.current = null;
-    }
-    setIsSpeaking(false);
-  }, []);
+  useEffect(() => {
+    queue.setLanguage(language);
+  }, [queue, language]);
+
+  const stopSpeaking = useCallback(() => queue.stop(), [queue]);
+
+  const beginStream = useCallback(() => {
+    if (readPref()) queue.begin();
+  }, [queue]);
+  const updateStream = useCallback((text: string) => queue.update(text), [queue]);
+  const endStream = useCallback((text: string) => queue.end(text), [queue]);
 
   const speak = useCallback(
-    async (text: string) => {
-      const speakable = toSpeakableText(text);
-      if (!readPref() || !speakable) return;
-
-      stopSpeaking();
-      const controller = new AbortController();
-      fetchRef.current = controller;
-      setIsSpeaking(true);
-
-      try {
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: speakable }),
-          signal: controller.signal,
-        });
-
-        if (res.status === 204 || !res.ok) {
-          // 204: voice not configured on the server — stay in text mode silently.
-          if (!res.ok) console.warn('TTS unavailable:', res.status);
-          setIsSpeaking(false);
-          return;
-        }
-
-        const blob = await res.blob();
-        if (controller.signal.aborted) return;
-        const url = URL.createObjectURL(blob);
-        urlRef.current = url;
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        const done = () => {
-          if (audioRef.current === audio) stopSpeaking();
-        };
-        audio.onended = done;
-        audio.onerror = done;
-        await audio.play();
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        console.error('❌ Error playing TTS audio:', err);
-        setIsSpeaking(false);
-      }
+    (text: string) => {
+      if (readPref() && text) queue.speak(text);
     },
-    [stopSpeaking],
+    [queue],
   );
 
   const toggleVoice = useCallback(() => {
     const next = !readPref();
     writePref(next);
-    if (!next) stopSpeaking();
-  }, [stopSpeaking]);
+    if (!next) queue.stop();
+  }, [queue]);
 
   // Stop audio when the component using the hook unmounts.
-  useEffect(() => stopSpeaking, [stopSpeaking]);
+  useEffect(() => () => queue.stop(), [queue]);
 
-  return { voiceEnabled, isSpeaking, toggleVoice, speak, stopSpeaking };
+  return { voiceEnabled, isSpeaking, toggleVoice, speak, stopSpeaking, beginStream, updateStream, endStream };
 }

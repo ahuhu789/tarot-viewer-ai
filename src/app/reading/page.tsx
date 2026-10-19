@@ -1,34 +1,14 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { useReading } from '@/hooks/useReading';
 import { VisualNovelScene } from '@/components/VisualNovelScene';
-import { TarotCard } from '@/types/tarot';
 
 export default function ReadingRoomPage() {
   const reading = useReading();
-  const [cardMeanings, setCardMeanings] = useState<TarotCard[]>([]);
 
-  // Load all card definitions once.
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/cards', { signal: controller.signal })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data.cards)) setCardMeanings(data.cards);
-      })
-      .catch((err) => {
-        if (!controller.signal.aborted) console.error('❌ Error fetching card definitions:', err);
-      });
-    return () => controller.abort();
-  }, []);
-
-  // O(1) lookups instead of Array.find on every render.
-  const meaningsByNumber = useMemo(
-    () => new Map(cardMeanings.map((c) => [c.cardNumber, c] as const)),
-    [cardMeanings],
-  );
-
+  // Card names come from the bundled canonical list (src/data/card-names.ts),
+  // so the page no longer downloads the whole meanings CSV as JSON.
   return (
     <VisualNovelScene
       state={reading.state}
@@ -36,7 +16,8 @@ export default function ReadingRoomPage() {
       isTyping={reading.isTyping}
       streamStore={reading.streamStore}
       error={reading.error}
-      meaningsByNumber={meaningsByNumber}
+      notice={reading.notice}
+      restored={reading.restored}
       onRetry={reading.retry}
       onDismissError={reading.dismissError}
       onSendMessage={reading.sendMessage}

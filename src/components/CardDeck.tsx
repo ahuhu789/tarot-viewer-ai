@@ -31,7 +31,7 @@ export function CardDeck({ onDraw }: CardDeckProps) {
   return (
     <div className="deck-panel">
       <p className="deck-prompt" aria-live="polite">
-        {shuffling ? 'Mixing the energies of the cards...' : 'Focus your intention and tap the deck to shuffle'}
+        {shuffling ? 'Đang xáo bài…' : 'Giữ câu hỏi trong tâm trí rồi chạm vào bộ bài để xáo'}
       </p>
 
       <button
@@ -39,7 +39,7 @@ export function CardDeck({ onDraw }: CardDeckProps) {
         className="deck-button"
         onClick={handleShuffleAndDraw}
         disabled={shuffling}
-        aria-label="Shuffle the deck"
+        aria-label="Xáo bài"
       >
         <div className="deck-stack">
           {FAN.map((i) => (

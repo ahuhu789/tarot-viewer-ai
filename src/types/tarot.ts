@@ -13,17 +13,20 @@ export interface TarotCard {
   guideUrl: string;
 }
 
-export type SpreadId = 'single' | 'three';
+export type SpreadId = 'single' | 'three' | 'love' | 'choice';
 
 export interface SpreadPosition {
-  name: string;
+  index: number; // 0-based index in the drawn cards array (= reading order)
+  name: string; // Vietnamese label shown in the UI
+  nameEn: string;
   description: string;
-  index: number; // 0-based index in the drawn cards array
+  descriptionEn: string;
 }
 
 export interface Spread {
   id: SpreadId;
   name: string;
+  nameEn: string;
   description: string;
   positions: SpreadPosition[];
 }

@@ -2,7 +2,8 @@
 
 import React, { memo } from 'react';
 import Image from 'next/image';
-import { DrawnCard, SpreadPosition, TarotCard as TarotCardType } from '@/types/tarot';
+import { DrawnCard, SpreadPosition } from '@/types/tarot';
+import { cardNameVi } from '@/data/card-names';
 import { CARD_BACK_URL, cardImageUrl } from '@/lib/cards';
 
 interface SpreadOverviewProps {
@@ -11,7 +12,6 @@ interface SpreadOverviewProps {
   currentCardIndex: number;
   highestCardIndexReached: number;
   canNavigate: boolean;
-  meaningsByNumber: Map<number, TarotCardType>;
   onGoToCard: (index: number) => void;
 }
 
@@ -22,23 +22,22 @@ function SpreadOverviewBase({
   currentCardIndex,
   highestCardIndexReached,
   canNavigate,
-  meaningsByNumber,
   onGoToCard,
 }: SpreadOverviewProps) {
   return (
-    <nav className="vn-spread-overview" aria-label="Cards in this spread">
+    <nav className="vn-spread-overview" aria-label="Các lá trong trải bài">
       {drawnCards.map((c, i) => {
         const isCurrent = currentCardIndex === i;
         const isAccessible = canNavigate && i <= highestCardIndexReached;
-        const name = meaningsByNumber.get(c.cardNumber)?.cardName || 'Card';
-        const position = positions[i]?.name ?? `Card ${i + 1}`;
+        const name = `${cardNameVi(c.cardNumber)}${c.isReversed ? ' (ngược)' : ''}`;
+        const position = `${i + 1}. ${positions[i]?.name ?? `Lá ${i + 1}`}`;
         return (
           <button
             key={i}
             type="button"
             className={`mini-card-slot ${isCurrent ? 'active' : ''}`}
-            title={`${position}: ${c.isRevealed ? name : 'not revealed'}`}
-            aria-label={`${position}: ${c.isRevealed ? name : 'not revealed'}`}
+            title={`${position}: ${c.isRevealed ? name : 'chưa lật'}`}
+            aria-label={`${position}: ${c.isRevealed ? name : 'chưa lật'}`}
             aria-current={isCurrent ? 'true' : undefined}
             disabled={!isAccessible}
             onClick={() => onGoToCard(i)}
