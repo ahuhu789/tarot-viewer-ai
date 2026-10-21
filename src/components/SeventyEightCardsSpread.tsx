@@ -76,7 +76,7 @@ export function SeventyEightCardsSpread({ spreadId, onSelectComplete }: SeventyE
         })}
       </div>
 
-      <button type="button" onClick={confirm} className="btn-gold" disabled={!complete || submitting}>
+      <button type="button" onClick={confirm} className="btn-primary" disabled={!complete || submitting}>
         {submitting ? 'Đang rút bài…' : 'Xác nhận ✦'}
       </button>
     </div>

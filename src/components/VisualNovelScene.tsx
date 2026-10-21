@@ -16,6 +16,7 @@ import { SpreadLayout } from './SpreadLayout';
 import { SpreadOverview } from './SpreadOverview';
 import { TarotCard } from './TarotCard';
 import { DialoguePanel } from './DialoguePanel';
+import { StarrySky } from './StarrySky';
 import { SPREADS } from '@/data/spreads';
 
 interface VisualNovelSceneProps {
@@ -52,15 +53,9 @@ const PHASE_GUIDANCE: Partial<Record<ReadingPhase, string>> = {
   drawing: 'Lật từng lá theo thứ tự. Khi tất cả đã ngửa, mình sẽ bắt đầu giải bài từ lá đầu tiên.',
 };
 
-/** Decorative background; memoized so it never re-renders. */
+/** The same night sky as the home page, dimmer and nearly still; memoized so it never re-renders. */
 const Ambience = memo(function Ambience() {
-  return (
-    <div aria-hidden="true">
-      <div className="starfield-ambient" />
-      <div className="candle-glow-left" />
-      <div className="candle-glow-right" />
-    </div>
-  );
+  return <StarrySky variant="subtle" />;
 });
 
 /** Picks the reader text to show: only assistant messages, matched to the current card when reading. */
@@ -246,7 +241,8 @@ export function VisualNovelScene({
             aria-pressed={voiceEnabled}
             aria-label={voiceEnabled ? 'Tắt giọng đọc' : 'Bật giọng đọc'}
           >
-            {voiceEnabled ? '🔊 Giọng đọc: bật' : '🔇 Giọng đọc: tắt'}
+            <span aria-hidden="true">{voiceEnabled ? '🔊' : '🔇'}</span>
+            <span className="voice-toggle__label">{voiceEnabled ? 'Giọng đọc: bật' : 'Giọng đọc: tắt'}</span>
           </button>
         </div>
       </header>
