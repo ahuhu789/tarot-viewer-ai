@@ -1,6 +1,7 @@
 'use client';
 
-import React, { memo, useCallback, useEffect, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { buildReadingViews, defaultViewId, type ViewId } from '@/lib/reading-views';
 import { isVietnamese } from '@/lib/reading-script';
 import { cardMeaningVi } from '@/data/card-meanings-vi';
 import Link from 'next/link';
@@ -41,6 +42,8 @@ interface VisualNovelSceneProps {
 
 const READING_PHASES: ReadingPhase[] = ['interpreting', 'card_chat'];
 const SPREAD_VISIBLE_PHASES: ReadingPhase[] = ['drawing', 'synthesis', 'follow_up', 'closing'];
+/** After all cards are read: the stored parts of the reading can be revisited. */
+const REVIEW_PHASES: ReadingPhase[] = ['synthesis', 'follow_up', 'closing'];
 
 /** Local guidance shown while the user is acting on the cards (no AI call in these phases). */
 const PHASE_GUIDANCE: Partial<Record<ReadingPhase, string>> = {
@@ -117,9 +120,43 @@ export function VisualNovelScene({
   const { phase, drawnCards, currentCardIndex } = state;
   const activeSpread = SPREADS[state.selectedSpread || 'three'];
   const revealedCount = drawnCards.filter((c) => c.isRevealed).length;
-  const readerText = useMemo(() => selectReaderText(messages, state), [messages, state]);
+  const latestText = useMemo(() => selectReaderText(messages, state), [messages, state]);
+  const vietnamese = ttsLanguage === 'vi';
 
   const isReading = READING_PHASES.includes(phase);
+  const isReview = REVIEW_PHASES.includes(phase);
+
+  // --- Revisit: every interpreted card, the synthesis and the Q&A, rebuilt from the
+  // stored messages (no AI call). A pick is tied to the newest reply, so a new answer
+  // (follow-up, synthesis) is shown automatically and the pick resets.
+  const views = useMemo(
+    () => buildReadingViews(messages, drawnCards, activeSpread, vietnamese),
+    [messages, drawnCards, activeSpread, vietnamese],
+  );
+  const lastAssistantId = useMemo(() => [...messages].reverse().find((m) => m.role === 'assistant')?.id ?? '', [messages]);
+  const [picked, setPicked] = useState<{ view: ViewId; after: string } | null>(null);
+  const pickedView = picked && picked.after === lastAssistantId && views.some((v) => v.id === picked.view) ? picked.view : null;
+  const reviewViewId = isReview ? (pickedView ?? defaultViewId(views, messages)) : null;
+  const reviewView = isReview && !isTyping ? views.find((v) => v.id === reviewViewId) : undefined;
+  const readerText = reviewView ? reviewView.text : latestText;
+  const speechText = reviewView ? reviewView.speech : latestText;
+
+  const selectView = useCallback(
+    (id: ViewId) => {
+      if (isReading) {
+        if (typeof id === 'number') onGoToCard(id); // during the reading a tab = going back to that card
+        return;
+      }
+      setPicked({ view: id, after: lastAssistantId });
+    },
+    [isReading, lastAssistantId, onGoToCard],
+  );
+  const tabs = useMemo(() => {
+    const list = isReading ? views.filter((v) => typeof v.id === 'number') : isReview ? views : [];
+    return list.map((v) => ({ id: v.id, label: v.label }));
+  }, [isReading, isReview, views]);
+  const activeTab: ViewId | null = isReading ? currentCardIndex : reviewViewId;
+  const selectedCardIndex = typeof reviewViewId === 'number' ? reviewViewId : -1;
   const activeCard = drawnCards[currentCardIndex];
   const activePosition = activeCard ? activeSpread?.positions[activeCard.positionIndex] : undefined;
   const nextPosition = activeSpread?.positions[currentCardIndex + 1];
@@ -134,8 +171,16 @@ export function VisualNovelScene({
   const activeKeywords = activeMeaningVi ? (activeCard?.isReversed ? activeMeaningVi.reversed : activeMeaningVi.upright) : '';
   const handleReplay = useCallback(() => {
     if (isSpeaking) stopSpeaking();
-    else speak(readerText);
-  }, [isSpeaking, readerText, speak, stopSpeaking]);
+    else speak(speechText);
+  }, [isSpeaking, speechText, speak, stopSpeaking]);
+  // Switching view stops the voice of the previous one.
+  const handleSelectView = useCallback(
+    (id: ViewId) => {
+      if (isSpeaking) stopSpeaking();
+      selectView(id);
+    },
+    [isSpeaking, selectView, stopSpeaking],
+  );
   const panelLayout = isReading ? 'side' : phase === 'greeting' || phase === 'intention' ? 'expanded' : 'bottom';
 
   const dialoguePanel = (
@@ -153,6 +198,9 @@ export function VisualNovelScene({
       nextPositionName={nextPosition?.name}
       notice={notice}
       voiceEnabled={voiceEnabled}
+      tabs={tabs}
+      activeTab={activeTab}
+      onSelectTab={handleSelectView}
       onReplay={handleReplay}
       onSend={onSendMessage}
       onRetry={onRetry}
@@ -185,10 +233,10 @@ export function VisualNovelScene({
             <SpreadOverview
               drawnCards={drawnCards}
               positions={activeSpread.positions}
-              currentCardIndex={currentCardIndex}
+              currentCardIndex={isReview ? selectedCardIndex : currentCardIndex}
               highestCardIndexReached={state.highestCardIndexReached}
-              canNavigate={isReading && !isTyping}
-              onGoToCard={onGoToCard}
+              canNavigate={(isReading || isReview) && !isTyping}
+              onGoToCard={handleSelectView}
             />
           )}
           <button
@@ -226,6 +274,8 @@ export function VisualNovelScene({
                 currentCardIndex={currentCardIndex}
                 onRevealCard={onRevealCard}
                 phase={phase}
+                selectedIndex={selectedCardIndex}
+                onSelectCard={isReview && !isTyping ? handleSelectView : undefined}
               />
             )}
           </div>

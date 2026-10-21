@@ -1285,6 +1285,103 @@ a {
   }
 }
 
+/* --- Revisit tabs: "1 · Quá khứ | 2 · Hiện tại | 3 · Tương lai | ✦ Tổng hợp" --- */
+.vn-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0.15rem 0 0.7rem;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vn-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vn-tab {
+  flex: none;
+  border: 1px solid var(--border-gold);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.32rem 0.8rem;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.vn-tab:hover:not(:disabled) {
+  color: var(--gold-primary);
+  border-color: var(--gold-dim);
+}
+
+.vn-tab.is-active {
+  background: rgba(230, 194, 98, 0.16);
+  border-color: var(--gold-primary);
+  color: var(--gold-primary);
+}
+
+.vn-tab:focus-visible {
+  outline: 2px solid var(--gold-primary);
+  outline-offset: 2px;
+}
+
+.vn-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.vn-tab--summary {
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .vn-tabs {
+    gap: 0.3rem;
+  }
+
+  .vn-tab {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.7rem;
+  }
+}
+
+.vn-dialogue-panel--bottom.has-tabs {
+  max-height: 52vh;
+  max-height: 52dvh;
+}
+
+/* Revealed cards after the reading: tap to re-read their interpretation. */
+.tarot-card__scene.is-selectable,
+.tarot-card__scene.is-selectable[aria-pressed] {
+  cursor: pointer;
+}
+
+.tarot-card__scene.is-selectable:hover {
+  transform: translateY(-3px);
+}
+
+.tarot-card__scene.is-selected::after {
+  opacity: 0.85;
+}
+
+.tarot-card__scene.is-selectable:focus-visible {
+  outline: 2px solid var(--gold-primary);
+  outline-offset: 4px;
+}
+
+.vn-text-box hr {
+  border: none;
+  border-top: 1px solid var(--border-gold);
+  margin: 1rem 0;
+}
+
 /* ==========================================================================
    Responsive: stack the reading layout under 900px
    ========================================================================== */

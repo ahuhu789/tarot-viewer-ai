@@ -26,6 +26,9 @@ interface TarotCardProps {
   isNext?: boolean;
   size?: CardSize;
   hideLabels?: boolean;
+  /** Revealed cards become selectable (e.g. to re-read their interpretation). */
+  onSelect?: (index: number) => void;
+  isSelected?: boolean;
 }
 
 // Rendered widths are controlled by CSS (see .tarot-card--* in globals.css);
@@ -50,16 +53,21 @@ function TarotCardBase({
   keywords = '',
   size = 'medium',
   hideLabels = false,
+  onSelect,
+  isSelected = false,
 }: TarotCardProps) {
   const showLabels = !hideLabels && size !== 'small';
   const orientation = isReversed ? 'Ngược' : 'Xuôi';
   const nameVi = cardNameVi(cardNumber);
   const nameEn = cardNameEn(cardNumber);
   const canFlip = !isRevealed && !locked;
+  const canSelect = isRevealed && !!onSelect;
+  const interactive = canFlip || canSelect;
 
   const handleFlip = useCallback(() => {
     if (canFlip) onReveal(index);
-  }, [canFlip, index, onReveal]);
+    else if (isRevealed && onSelect) onSelect(index);
+  }, [canFlip, index, isRevealed, onReveal, onSelect]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -73,7 +81,7 @@ function TarotCardBase({
 
   const where = positionName ? `${positionName}: ` : '';
   const label = isRevealed
-    ? `${where}${nameVi} (${nameEn}), ${orientation.toLowerCase()}`
+    ? `${where}${nameVi} (${nameEn}), ${orientation.toLowerCase()}${canSelect ? ', nhấn để xem lời giải' : ''}`
     : locked
       ? `${where}lá úp, hãy lật các lá trước theo thứ tự`
       : `${where}lá úp, nhấn để lật`;
@@ -88,14 +96,14 @@ function TarotCardBase({
       )}
 
       <div
-        className={`tarot-card__scene ${isActive ? 'is-active' : ''} ${isNext && !isRevealed ? 'is-next' : ''} ${locked && !isRevealed ? 'is-locked' : ''}`}
+        className={`tarot-card__scene ${isActive ? 'is-active' : ''} ${isNext && !isRevealed ? 'is-next' : ''} ${locked && !isRevealed ? 'is-locked' : ''} ${canSelect ? 'is-selectable' : ''} ${canSelect && isSelected ? 'is-selected' : ''}`}
         onClick={handleFlip}
         onKeyDown={handleKeyDown}
         role="button"
-        tabIndex={canFlip ? 0 : -1}
+        tabIndex={interactive ? 0 : -1}
         aria-label={label}
-        aria-disabled={!canFlip}
-        aria-pressed={isRevealed}
+        aria-disabled={!interactive}
+        aria-pressed={canSelect ? isSelected : isRevealed}
       >
         <div className={`card-inner ${isRevealed ? 'is-flipped' : ''} ${isReversed ? 'is-reversed-card' : ''}`}>
           <div className="card-face card-back">
