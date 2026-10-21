@@ -8,7 +8,8 @@ export const DECK_ID = '1909';
 /** Width / height of the card scans (600 × 1039 after optimization). */
 export const CARD_ASPECT_RATIO = '600 / 1039';
 
-export const CARD_BACK_URL = '/cards/web/back.webp';
+/** Galaxy card back (scripts/generate-card-back.mjs). */
+export const CARD_BACK_URL = '/cards/web/back-galaxy.webp';
 
 export function cardImageUrl(cardNumber: number, deckId: string = DECK_ID): string {
   return `/cards/web/${deckId}/${cardNumber}.webp`;

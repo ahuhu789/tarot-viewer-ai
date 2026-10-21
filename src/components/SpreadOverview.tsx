@@ -46,7 +46,7 @@ function SpreadOverviewBase({
               src={c.isRevealed ? cardImageUrl(c.cardNumber) : CARD_BACK_URL}
               alt=""
               fill
-              className="mini-card-image"
+              className={`mini-card-image ${c.isRevealed ? '' : 'is-back'}`}
               sizes="32px"
             />
           </button>

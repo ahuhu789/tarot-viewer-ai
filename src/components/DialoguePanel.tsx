@@ -123,7 +123,7 @@ const DialogueInput = memo(function DialogueInput({
         aria-label="Tin nhắn gửi người đọc bài"
         className="vn-text-input"
       />
-      <button type="submit" className="btn-gold vn-send-btn" disabled={!canSend}>
+      <button type="submit" className="btn-primary vn-send-btn" disabled={!canSend}>
         ✦ Gửi
       </button>
     </form>
@@ -244,7 +244,7 @@ function DialoguePanelBase({
 
         <div className="vn-buttons-row">
           {phase === 'drawing' && allRevealed && (
-            <button type="button" onClick={onFinishDrawing} className="btn-gold vn-action-btn">
+            <button type="button" onClick={onFinishDrawing} className="btn-primary vn-action-btn">
               Bắt đầu giải bài ✦
             </button>
           )}
@@ -256,7 +256,7 @@ function DialoguePanelBase({
             </div>
           )}
           {phase === 'card_chat' && (
-            <button type="button" onClick={onAdvance} className="btn-gold vn-action-btn" disabled={isTyping}>
+            <button type="button" onClick={onAdvance} className="btn-primary vn-action-btn" disabled={isTyping}>
               {isLastCard
                 ? totalCards > 1
                   ? 'Xem tổng hợp trải bài ✦'
@@ -268,7 +268,7 @@ function DialoguePanelBase({
             <button
               type="button"
               onClick={onRestart}
-              className={phase === 'closing' ? 'btn-gold vn-action-btn' : 'vn-secondary-btn'}
+              className={phase === 'closing' ? 'btn-primary vn-action-btn' : 'vn-secondary-btn'}
             >
               Bắt đầu hành trình mới ✦
             </button>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Playfair_Display, Cormorant_Garamond, Inter } from 'next/font/google';
 import './globals.css';
+import './stars.generated.css';
 
 // All three families ship a Vietnamese subset, so diacritics (ạ, ế, ữ, ẫ…)
 // render in the intended typeface instead of falling back glyph-by-glyph.
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#030308',
+  themeColor: '#07040f',
 };
 
 export default function RootLayout({
