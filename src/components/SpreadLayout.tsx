@@ -11,13 +11,24 @@ interface SpreadLayoutProps {
   currentCardIndex: number;
   onRevealCard: (index: number) => void;
   phase: string;
+  /** After the reading: the card whose interpretation is shown (-1 = none). */
+  selectedIndex?: number;
+  onSelectCard?: (index: number) => void;
 }
 
 /**
  * The drawn spread. Cards are turned strictly in reading order (1 → 2 → 3), the
  * same order in which they are interpreted, so the ritual and the reading match.
  */
-function SpreadLayoutBase({ drawnCards, spreadId, currentCardIndex, onRevealCard, phase }: SpreadLayoutProps) {
+function SpreadLayoutBase({
+  drawnCards,
+  spreadId,
+  currentCardIndex,
+  onRevealCard,
+  phase,
+  selectedIndex = -1,
+  onSelectCard,
+}: SpreadLayoutProps) {
   const spread = SPREADS[spreadId];
   if (!spread) return null;
   const cards = [...drawnCards].sort((a, b) => a.positionIndex - b.positionIndex);
@@ -42,6 +53,8 @@ function SpreadLayoutBase({ drawnCards, spreadId, currentCardIndex, onRevealCard
             positionBadge={multi ? String(card.positionIndex + 1) : ''}
             locked={phase === 'drawing' && card.positionIndex !== nextToReveal}
             isNext={phase === 'drawing' && card.positionIndex === nextToReveal}
+            onSelect={onSelectCard}
+            isSelected={selectedIndex === card.positionIndex}
             size="medium"
           />
         );

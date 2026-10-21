@@ -6,6 +6,8 @@ import { ReadingPhase } from '@/types/tarot';
 import type { TextStream } from '@/lib/text-stream';
 import type { ReadingError } from '@/hooks/useReading';
 import { LIMITS } from '@/lib/limits';
+import { ReadingTabs, type ReadingTab } from './ReadingTabs';
+import type { ViewId } from '@/lib/reading-views';
 
 // Only simple formatting from the model is rendered; links, images and raw HTML are dropped.
 const ALLOWED_ELEMENTS = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'br', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'hr'];
@@ -144,6 +146,10 @@ export interface DialoguePanelProps {
   /** Status line while waiting (e.g. AI rate limit). */
   notice?: string | null;
   voiceEnabled?: boolean;
+  /** Revisit tabs (cards / synthesis / Q&A); hidden when fewer than two. */
+  tabs?: ReadingTab[];
+  activeTab?: ViewId | null;
+  onSelectTab?: (id: ViewId) => void;
   onReplay?: () => void;
   onSend: (text: string) => void;
   onRetry: () => void;
@@ -173,6 +179,9 @@ function DialoguePanelBase({
   nextPositionName,
   notice,
   voiceEnabled,
+  tabs,
+  activeTab = null,
+  onSelectTab,
   onReplay,
   onSend,
   onRetry,
@@ -186,7 +195,7 @@ function DialoguePanelBase({
 
   return (
     <section
-      className={`vn-dialogue-panel vn-dialogue-panel--${layout} ${isSpeaking ? 'speaker-active' : ''}`}
+      className={`vn-dialogue-panel vn-dialogue-panel--${layout} ${isSpeaking ? 'speaker-active' : ''} ${tabs && tabs.length > 1 ? 'has-tabs' : ''}`}
       aria-label="Trò chuyện với người đọc bài"
     >
       <div className="vn-name-row">
@@ -197,6 +206,10 @@ function DialoguePanelBase({
           </button>
         )}
       </div>
+
+      {tabs && tabs.length > 1 && onSelectTab && (
+        <ReadingTabs tabs={tabs} active={activeTab} disabled={isTyping} onSelect={onSelectTab} />
+      )}
 
       <DialogueText
         text={text}
